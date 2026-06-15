@@ -5836,6 +5836,73 @@ label {
   align-items: center;
 }
 
+.delete-confirm-panel {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(480px, calc(100vw - 32px));
+  height: auto;
+  max-height: calc(100vh - 32px);
+  margin: auto;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.delete-confirm-body {
+  padding: 16px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.delete-confirm-message {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.delete-confirm-subtitle {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+.delete-confirm-list {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.delete-confirm-list strong {
+  color: var(--danger);
+}
+
+.delete-confirm-note {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted, #6b7280);
+}
+
+.delete-confirm-loading {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted, #6b7280);
+}
+
+.delete-confirm-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.delete-confirm-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--line);
+}
+
 .download-button {
   display: inline-flex;
   align-items: center;

@@ -13,6 +13,7 @@ import type {
   ResistanceSummaryResponse,
   VisualizationPayload,
   DeleteRawDataFileResponse,
+  RawDataDeletePreview,
 } from "../types/rawData";
 import type { DeleteResponse } from "../types/sample";
 
@@ -48,6 +49,10 @@ export function parseRawData(rawDataId: string | number, parserName = "resistanc
 
 export function deleteRawData(rawDataId: string | number) {
   return apiClient.delete<DeleteResponse>(`/api/raw-data/${rawDataId}`);
+}
+
+export function getRawDataDeletePreview(rawDataId: string | number) {
+  return apiClient.get<RawDataDeletePreview>(`/api/raw-data/${rawDataId}/delete-preview`);
 }
 
 export function rawDataFileDownloadUrl(fileId: string | number) {

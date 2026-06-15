@@ -57,3 +57,16 @@ export type SampleListParams = {
 export type DeleteResponse = {
   deleted: number;
 };
+
+export type SampleDeletePreview = {
+  sample_display_code: string;
+  test_data: number;
+  process_records: number;
+  raw_data: number;
+  raw_data_files: number;
+  parsed_data: number;
+  parsed_records: number;
+  characterization_files: number;
+  performance_datasets: number;
+  files_total: number;
+};

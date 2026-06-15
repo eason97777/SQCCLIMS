@@ -52,6 +52,14 @@ export type RawDataFile = {
   created_at: string;
 };
 
+export type RawDataDeletePreview = {
+  raw_data_code: string;
+  raw_data_files: number;
+  parsed_data: number;
+  parsed_records: number;
+  files_total: number;
+};
+
 export type DeleteRawDataFileResponse = {
   deleted_file_id: number;
   raw_data_id: number;

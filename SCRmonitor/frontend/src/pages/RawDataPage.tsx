@@ -1,15 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
-import { getParsedData, getProcessingJobs } from "../api/rawDataApi";
+import {
+  getParsedData,
+  getProcessingJobs,
+  getRawDataDeletePreview,
+} from "../api/rawDataApi";
 import { getSamples } from "../api/samplesApi";
 import { RawDataDetailPanel } from "../components/rawData/RawDataDetailPanel";
 import { RawDataFilter } from "../components/rawData/RawDataFilter";
 import { RawDataForm } from "../components/rawData/RawDataForm";
 import { RawDataTable } from "../components/rawData/RawDataTable";
+import {
+  DeleteConfirmDialog,
+  type DeletePreviewLine,
+} from "../components/common/DeleteConfirmDialog";
 import { useRawDataStore } from "../stores/rawDataStore";
 import type { Sample } from "../types/sample";
 import type {
   ParsedDataRecord,
   ProcessingJobRecord,
+  RawDataDeletePreview,
   RawDataPayload,
   RawDataRecord,
   VisualizationPayload,
@@ -220,6 +229,11 @@ export function RawDataPage() {
   const [selectedParsedData, setSelectedParsedData] = useState<ParsedDataRecord | null>(null);
   const [processingJobs, setProcessingJobs] = useState<ProcessingJobRecord[]>([]);
   const [activeMainTab, setActiveMainTab] = useState<RawDataMainTab>("list");
+  const [pendingDelete, setPendingDelete] = useState<RawDataRecord | null>(null);
+  const [preview, setPreview] = useState<RawDataDeletePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const pageError = useMemo(
     () => localError || error || samplesError,
@@ -359,14 +373,33 @@ export function RawDataPage() {
     }
   }
 
-  async function handleDelete(record: RawDataRecord) {
-    const confirmed = window.confirm(`确认删除 Raw Data：${record.raw_data_code}？`);
-    if (!confirmed) {
+  function requestDelete(record: RawDataRecord) {
+    setPendingDelete(record);
+    setPreview(null);
+    setPreviewError("");
+    setPreviewLoading(true);
+    getRawDataDeletePreview(record.id)
+      .then((result) => setPreview(result))
+      .catch((err) =>
+        setPreviewError(err instanceof Error ? err.message : "获取删除影响范围失败"),
+      )
+      .finally(() => setPreviewLoading(false));
+  }
+
+  function cancelDelete() {
+    setPendingDelete(null);
+    setPreview(null);
+    setPreviewError("");
+    setPreviewLoading(false);
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) {
       return;
     }
-
+    const record = pendingDelete;
     setLocalError("");
-
+    setDeleting(true);
     try {
       await deleteRawData(record.id);
       if (selectedRawData?.id === record.id) {
@@ -375,10 +408,26 @@ export function RawDataPage() {
         setProcessingJobs([]);
         setActiveMainTab("list");
       }
+      cancelDelete();
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "删除 Raw Data 失败");
+    } finally {
+      setDeleting(false);
     }
   }
+
+  const deletePreviewLines = useMemo<DeletePreviewLine[]>(() => {
+    if (!preview) {
+      return [];
+    }
+    const candidates: DeletePreviewLine[] = [
+      { label: "个源文件", count: preview.raw_data_files },
+      { label: "条解析数据", count: preview.parsed_data },
+      { label: "条解析记录", count: preview.parsed_records },
+      { label: "个关联文件", count: preview.files_total },
+    ];
+    return candidates.filter((line) => line.count > 0);
+  }, [preview]);
 
   async function handleParse(rawDataId: number) {
     setLocalError("");
@@ -454,7 +503,7 @@ export function RawDataPage() {
                 rawData={rawData}
                 selectedRawDataId={selectedRawData?.id ?? null}
                 onSelect={(record) => void handleSelect(record)}
-                onDelete={(record) => void handleDelete(record)}
+                onDelete={(record) => requestDelete(record)}
               />
             )}
           </section>
@@ -499,6 +548,18 @@ export function RawDataPage() {
           )}
         </section>
       ) : null}
+
+      <DeleteConfirmDialog
+        open={pendingDelete !== null}
+        title="删除 Raw Data"
+        message={`确认删除 Raw Data：${pendingDelete?.raw_data_code ?? ""}？此操作不可撤销。`}
+        previewLines={deletePreviewLines}
+        loading={previewLoading}
+        error={previewError}
+        deleting={deleting}
+        onConfirm={() => void confirmDelete()}
+        onCancel={cancelDelete}
+      />
     </section>
   );
 }

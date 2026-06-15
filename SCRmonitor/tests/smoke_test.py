@@ -77,6 +77,13 @@ def http_post(url: str, payload: dict, timeout: float = 5.0):
         return resp.status, body
 
 
+def http_delete(url: str, timeout: float = 5.0):
+    req = urllib.request.Request(url, method="DELETE")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        body = resp.read().decode("utf-8")
+        return resp.status, body
+
+
 # GET endpoints that must answer 200 with a JSON body on an empty database.
 READ_ENDPOINTS = [
     "/api/summary",
@@ -172,7 +179,7 @@ def run() -> int:
                 status, body = http_post(base + "/api/samples", payload)
                 if status in (200, 201):
                     created = json.loads(body)
-                    created_code = created.get("sample_display_code") or created.get("sample_uid")
+                    created_id = created.get("id")
                     passes.append(f"POST /api/samples -> {status}")
                 else:
                     failures.append(f"POST /api/samples -> {status} (expected 200/201)")
@@ -190,6 +197,37 @@ def run() -> int:
                     failures.append("created sample not reflected in /api/samples list")
             except Exception as exc:  # noqa: BLE001
                 failures.append(f"sample readback raised {type(exc).__name__}: {exc}")
+
+            # 4) Cascade-preview endpoint ----------------------------------
+            if created_id is not None:
+                try:
+                    status, body = http_get(base + f"/api/samples/{created_id}/delete-preview")
+                    preview = json.loads(body)
+                    if status == 200 and "files_total" in preview and "parsed_records" in preview:
+                        passes.append("GET /api/samples/{id}/delete-preview -> 200 with counts")
+                    else:
+                        failures.append(f"delete-preview -> {status} / unexpected body {preview}")
+                except Exception as exc:  # noqa: BLE001
+                    failures.append(f"delete-preview raised {type(exc).__name__}: {exc}")
+
+            # 5) Delete round-trip (exercises backup + file cleanup + audit)
+            if created_id is not None:
+                try:
+                    status, body = http_delete(base + f"/api/samples/{created_id}")
+                    if status in (200, 204):
+                        passes.append(f"DELETE /api/samples/{{id}} -> {status}")
+                        # confirm it is gone from the list
+                        _, lb = http_get(base + "/api/samples")
+                        rows = json.loads(lb)
+                        items = rows if isinstance(rows, list) else rows.get("items", [])
+                        if not any(r.get("id") == created_id for r in items):
+                            passes.append("deleted sample no longer listed")
+                        else:
+                            failures.append("deleted sample still appears in list")
+                    else:
+                        failures.append(f"DELETE /api/samples/{{id}} -> {status} (expected 200/204)")
+                except Exception as exc:  # noqa: BLE001
+                    failures.append(f"DELETE raised {type(exc).__name__}: {exc}")
 
         finally:
             proc.terminate()
