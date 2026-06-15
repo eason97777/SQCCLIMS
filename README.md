@@ -1,146 +1,113 @@
-# JIQT_2
+# SCRmonitor
 
-## 项目简介
+SCRmonitor (internally JIQT) is a locally-run **LIMS/MES** for a semiconductor / materials sample-testing lab. It runs as a single desktop-grade web application that keeps sample tracking, process records, MES process routes, raw measurement data, parsing, and visualization together in one local SQLite store — no cloud, no external services.
 
-JIQT_2 / SCRmonitor 是一个本地实验数据管理与分析系统，用于样品管理、Raw Data 上传、解析器处理、前端可视化展示，以及本地 SQLite 与运行时文件存储管理。
+## What it does
 
-系统当前处于早期阶段，核心目标是将样品、测试数据、工艺记录、原始测量文件、解析后的结构化记录、表征文件、性能数据集和 MES 风格流程信息集中到一个本地 Web 应用中管理。
+- **Sample tracking (LIMS)** — register samples, test data, characterization files, and performance datasets.
+- **Process records** — capture per-sample, per-layer process records (substrate, resistance type, wafer thickness, free-form details).
+- **MES process routes** — define route templates (project → layers → steps) and instantiate them per sample, advancing samples step by step with an event history.
+- **Raw-data ingestion** — upload resistance and CD/SEM measurement files (CSV/XLSX) against raw-data records.
+- **Parsing** — turn raw files into normalized, queryable parsed records (resistance maps, CD/SEM measurements).
+- **Visualization** — generate **heatmaps** (resistance) and **violin plots** (CD/SEM) as downloadable chart artifacts.
 
-## 技术栈
+## Tech stack
 
-- Backend: Python standard-library HTTP server, SQLite。
-- Frontend: React + TypeScript + Vite。
-- Data processing: `SCRmonitor/parsers/` 下的 parser modules。
-- Packaging: `SCRmonitor/packaging/` 下的 PowerShell / installer scripts。
-- Package managers: Python 使用 `pip`，Frontend 使用 `npm`。
+| Layer | Technology |
+|-------|-----------|
+| Backend | Python **standard library only** (`http.server` + `sqlite3`) — no third-party web framework |
+| Database | SQLite (WAL mode), file-based, lives under the data directory |
+| Frontend | **React 19 + TypeScript + Vite** single-page app |
+| Parsers/visualizers | `parsers/` package (resistance + CD/SEM), invoked from the backend |
 
-## 目录结构
+The backend is intentionally dependency-free so it can be packaged and run on a lab workstation with just a Python install. Spreadsheet support (XLSX) is the one optional dependency declared in `SCRmonitor/requirements.txt`.
 
-- `SCRmonitor/server.py`: 后端主入口，负责 HTTP API、SQLite 访问、数据库迁移、文件上传、运行时输出访问和静态前端文件服务。
-- `SCRmonitor/frontend/`: React + TypeScript + Vite 前端工程，包含页面、组件、API client、状态管理、类型定义和静态资源。
-- `SCRmonitor/parsers/`: Raw Data 与测量文件解析、结构化记录生成、图表或可视化输出相关逻辑。
-- `SCRmonitor/migrations/`: SQLite schema 和种子数据迁移文件，用于可复现地初始化或升级数据库结构。
-- `SCRmonitor/templates/`: 应用需要提供给用户的安全模板文件。
-- `SCRmonitor/tools/`: 本地辅助工具脚本。
-- `SCRmonitor/packaging/`: 打包、安装、服务注册和 installer 配置相关脚本。
-- `SCRmonitor/data/`: 默认本地运行数据目录。Git 中只保留 `.gitkeep` 占位文件，不提交真实运行数据。
-- `docs/`: 项目级说明文档，包括代码结构、数据流和开发指南。
+## Repository layout
 
-## 环境变量
-
-`.env` 仅用于本地环境，禁止提交到 Git。`.env.example` 是安全模板，只能包含占位值和说明，不得包含真实 API key、token、password、credential 或 private config。
-
-支持的环境变量：
-
-- `JIQT_HOST`: 后端监听地址，未设置时使用默认值。
-- `PORT`: 后端监听端口，未设置时默认使用 `8000`。
-- `JIQT_DATA_DIR`: 运行时数据目录，用于 SQLite database、uploads、outputs、logs 和 backups。
-- `OPENAI_API_KEY`: 仅在未来需要相关功能时作为占位变量使用，不得在 Git 中保存真实值。
-
-## 本地开发启动
-
-Backend setup:
-
-```powershell
-python -m venv .venv
-pip install -r SCRmonitor/requirements.txt
+```
+SCRmonitor/                 # repo root
+├── README.md               # this file
+├── CONTRIBUTING.md         # dev workflow, adding endpoints / migrations
+├── docs/                   # ARCHITECTURE, CODE_PRINCIPLES, GLOSSARY (+ legacy notes)
+├── frontend/               # (legacy/empty scaffold — active SPA is below)
+├── history/                # legacy snapshots, gitignored
+└── SCRmonitor/             # the application
+    ├── server.py           # thin entrypoint
+    ├── app/                # backend package (config, db, http, features, …)
+    ├── parsers/            # resistance + CD/SEM parsers and visualizers
+    ├── migrations/         # forward-only SQL migrations
+    ├── frontend/           # React + TS + Vite SPA (active)
+    ├── templates/          # downloadable import templates
+    └── tests/smoke_test.py # regression smoke test
 ```
 
-Run backend:
+## Quickstart
 
-```powershell
-python SCRmonitor/server.py
+### Backend
+
+From `SCRmonitor/SCRmonitor/`:
+
+```bash
+python3 server.py --host 127.0.0.1 --port 8000
+# optional explicit data directory:
+python3 server.py --host 127.0.0.1 --port 8000 --data-dir ./data
 ```
 
-如需显式指定运行目录：
+On startup the server configures paths, ensures data directories, initializes the SQLite schema, runs pending migrations, and takes a startup backup before serving. It then serves the API under `/api/` and the built SPA for all other routes.
 
-```powershell
-python SCRmonitor/server.py --host 0.0.0.0 --port 8000 --data-dir SCRmonitor/data
+Install the optional spreadsheet dependency if you need XLSX ingestion:
+
+```bash
+pip install -r requirements.txt
 ```
 
-Frontend setup:
+### Frontend
 
-```powershell
-cd SCRmonitor/frontend
+From `SCRmonitor/SCRmonitor/frontend/`:
+
+```bash
 npm install
-npm run dev
+npm run build      # outputs to frontend/dist, which the backend serves
+# or, for live development:
+npm run dev        # Vite dev server on :5173
 ```
 
-Production frontend build:
+The backend serves the production build from `frontend/dist`. For a fully working app, build the frontend before (or alongside) running the backend.
 
-```powershell
-cd SCRmonitor/frontend
-npm run build
+### Where data lives
+
+All runtime state lives under the **data directory**:
+
+- default: `SCRmonitor/SCRmonitor/data/`
+- override with `--data-dir DIR` or the `JIQT_DATA_DIR` environment variable.
+
+Subdirectories: `sample_testing.db` (the SQLite database), `uploads/`, `outputs/`, `logs/`, `backups/`. None of this is committed to git — only `.gitkeep` placeholders are.
+
+### Smoke test
+
+```bash
+python3 tests/smoke_test.py        # from SCRmonitor/SCRmonitor/
 ```
 
-`SCRmonitor/frontend/dist` 是生成目录，不应提交。
+Boots the server against a throwaway temp data directory, exercises the key read endpoints plus one create round-trip, and exits non-zero on any regression. Keep it green.
 
-## 运行数据策略
+## Configuration
 
-运行数据必须保留在本地，不进入 Git。包括但不限于：
+| Env var | Meaning | Default |
+|---------|---------|---------|
+| `JIQT_HOST` | bind host | `0.0.0.0` |
+| `PORT` | bind port | `8000` |
+| `JIQT_DATA_DIR` | runtime data directory | `SCRmonitor/data` |
+| `JIQT_AUTH_ENABLED` | turn token auth ON (truthy) | off |
+| `JIQT_AUTH_DISABLED` | hard-override that keeps auth OFF | off |
+| `JIQT_API_TOKENS` | `token:role,token:role` map (roles: admin/operator/viewer) | empty |
 
-- SQLite databases: `*.db`, `*.sqlite`, `*.sqlite3`
-- uploaded Raw Data
-- parsed raw data
-- generated outputs
-- charts
-- reports
-- exports
-- logs
-- backups
-- artifacts
-- local runtime folders
+Auth is **disabled by default**; see `docs/ARCHITECTURE.md` and `CONTRIBUTING.md` for details.
 
-`SCRmonitor/data/` 只提交 `.gitkeep` 占位文件，用于保留目录结构。真实数据库、上传文件、输出文件和日志必须由本地运行环境生成，并通过 `.gitignore` 排除。
+## Documentation
 
-## Git 上传原则
-
-应提交：
-
-- source code
-- frontend/backend configuration
-- dependency manifests and lock files
-- documentation
-- templates
-- migrations
-- packaging source scripts and installer configuration
-- safe project rule files
-
-禁止提交：
-
-- `.env` 或任何 secrets
-- API keys, tokens, credentials, passwords, private config
-- `node_modules`
-- virtual environments
-- Python cache files
-- `SCRmonitor/frontend/dist`
-- `SCRmonitor/packaging/output`
-- `SCRmonitor/packaging/staging`
-- SQLite databases
-- runtime uploads, outputs, exports, reports, charts, logs, backups
-- real experimental data or business data
-
-提交前建议检查：
-
-```powershell
-git status
-git add -n .
-```
-
-如果已经暂存文件，提交前检查：
-
-```powershell
-git diff --cached --name-only
-```
-
-确认暂存列表不包含 secrets、运行数据、数据库、构建产物或依赖目录后，再执行正式提交。
-
-## 相关文档
-
-- `docs/Code_Structure.md`: 代码结构和主要目录说明。
-- `docs/Data_Flow.md`: 数据创建、上传、解析、结构化和前端消费流程。
-- `docs/Development_Guide.md`: 本地开发、环境变量、parser 修改和 Git 检查指南。
-- `SCRmonitor/migrations/README.md`: SQLite migration 规则。
-- `SCRmonitor/packaging/README_PACKAGING.md`: 打包说明。
-- `SCRmonitor/packaging/installer/README_INSTALLER.md`: installer 构建说明。
-
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layered architecture, request lifecycle, data model, infra.
+- [`docs/CODE_PRINCIPLES.md`](docs/CODE_PRINCIPLES.md) — conventions for humans and coding agents.
+- [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — plain-language definitions of domain and tech terms.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — dev workflow, adding endpoints, adding migrations.
+- [`SCRmonitor/migrations/README.md`](SCRmonitor/migrations/README.md) — migration mechanics.
