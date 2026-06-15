@@ -91,6 +91,27 @@ def authenticate(headers):
     return token_store().get(token)
 
 
+def auth_status(headers):
+    """Public auth-discovery payload for GET /api/auth/me.
+
+    Always describes the current auth state without ever raising. Lets the
+    frontend learn whether login is required and validate a token before
+    storing it.
+
+    When auth is disabled the app needs no login, so the caller is treated as
+    authenticated with no role. When enabled, the role is derived from the
+    request token (None when missing/invalid).
+    """
+    if not auth_enabled():
+        return {"auth_enabled": False, "authenticated": True, "role": None}
+    role = authenticate(headers)
+    return {
+        "auth_enabled": True,
+        "authenticated": role is not None,
+        "role": role,
+    }
+
+
 def authorize(method, path, headers):
     """Middleware: enforce auth + RBAC for /api/ paths when auth is enabled.
 
@@ -99,6 +120,11 @@ def authorize(method, path, headers):
     invalid token and AuthorizationError (403) when the role is insufficient.
     """
     if not auth_enabled():
+        return
+    # Allowlist: the auth-discovery endpoint must be reachable without a token
+    # so the login screen can read auth state and validate a token. It is
+    # read-only and exposes no protected data.
+    if path == "/api/auth/me":
         return
     if not path.startswith("/api/"):
         return

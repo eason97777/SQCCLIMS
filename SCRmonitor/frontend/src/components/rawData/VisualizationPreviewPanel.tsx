@@ -8,7 +8,7 @@ import type {
   VisualizationOutput,
   VisualizationSchemaField,
 } from "../../types/rawData";
-import { getParsedRecordOptions, visualizationChartsDownloadUrl } from "../../api/rawDataApi";
+import { downloadVisualizationCharts, getParsedRecordOptions } from "../../api/rawDataApi";
 
 type VisualizationPreviewPanelProps = {
   selectedParsedData: ParsedDataRecord | null;
@@ -354,7 +354,7 @@ export function VisualizationPreviewPanel({
     if (!successJob || selectedDownloadableChartKeys.length === 0) {
       return;
     }
-    window.location.href = visualizationChartsDownloadUrl(successJob.id, selectedDownloadableChartKeys);
+    void downloadVisualizationCharts(successJob.id, selectedDownloadableChartKeys);
   }
 
   function submitChartEdit(event: React.FormEvent<HTMLFormElement>) {

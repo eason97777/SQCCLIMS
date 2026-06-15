@@ -125,3 +125,15 @@ export function visualizationChartsDownloadUrl(jobId: string | number, chartKeys
     chart_key: chartKeys,
   });
 }
+
+export function downloadVisualizationCharts(jobId: string | number, chartKeys: string[]) {
+  return apiClient.downloadFile(
+    `/api/processing-jobs/${jobId}/charts/download`,
+    `charts-${jobId}.zip`,
+    { chart_key: chartKeys },
+  );
+}
+
+export function downloadRawDataFile(fileId: string | number, filename?: string) {
+  return apiClient.downloadFile(`/api/raw-data-files/${fileId}/download`, filename);
+}

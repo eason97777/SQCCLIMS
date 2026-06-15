@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiClient } from "../../api/apiClient";
 import type {
   ParsedDataRecord,
   ProcessingJobRecord,
@@ -38,9 +39,18 @@ function canParseRawData(dataType: string) {
 function TemplateDownloadHint({ dataType }: { dataType: string }) {
   if (dataType === "cd_sem") {
     return (
-      <a className="button-like raw-template-download-button" href="/api/templates/cd_sem_template.csv">
+      <button
+        className="button-like raw-template-download-button"
+        type="button"
+        onClick={() =>
+          void apiClient.downloadFile(
+            "/api/templates/cd_sem_template.csv",
+            "cd_sem_template.csv",
+          )
+        }
+      >
         下载 CD 数据模板
-      </a>
+      </button>
     );
   }
 

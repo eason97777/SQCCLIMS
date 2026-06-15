@@ -92,3 +92,18 @@ export function getCharacterizationPreviewBlob(fileId: string | number) {
 export function downloadCharacterizationFile(fileId: string | number) {
   return apiClient.getBlob(`/api/characterization-files/${fileId}/download`);
 }
+
+/**
+ * Auth-aware "save original file" action. Fetches with the token and triggers a
+ * browser download, replacing the raw `<a href download>` that would 401 under
+ * auth.
+ */
+export function saveCharacterizationFile(
+  fileId: string | number,
+  filename?: string,
+) {
+  return apiClient.downloadFile(
+    `/api/characterization-files/${fileId}/download`,
+    filename,
+  );
+}
