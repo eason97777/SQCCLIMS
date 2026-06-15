@@ -1,0 +1,5 @@
+row_group,side,direction,die_no,dose,cd_value,unit,location
+row_1,Left,Vertical,1,dose 6,383.978,nm,center
+row_1,Left,Vertical,2,dose 6,371.656,nm,center
+row_1,Right,Horizontal,1,dose 6.5,289.897,nm,edge
+row_2,Right,Horizontal,12,dose 6.5,295.477,nm,edge

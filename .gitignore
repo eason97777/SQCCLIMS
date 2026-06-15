@@ -1,0 +1,52 @@
+# === OS / editor ===
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# === Claude / tooling ===
+.claude/
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# === Node / frontend build artifacts ===
+node_modules/
+SCRmonitor/frontend/dist/
+frontend/dist/
+SCRmonitor/static/
+
+# === Runtime data — NEVER commit lab data, uploads, outputs, or the DB ===
+SCRmonitor/data/
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# === Logs ===
+*.log
+logs/
+
+# === Backups produced by the data-safety layer ===
+SCRmonitor/data/backups/
+backups/
+
+# === Legacy snapshots (156MB of old copies kept on disk, out of version control) ===
+history/
+
+# === Packaging build output ===
+build/
+dist/
+*.spec.bak
