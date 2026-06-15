@@ -1,6 +1,6 @@
 # Architecture
 
-SCRmonitor's backend is a small, dependency-free Python application organized into clear layers. This document describes those layers, the request lifecycle, the data model, and the cross-cutting infrastructure.
+SQCCLIMS's backend is a small, dependency-free Python application organized into clear layers. This document describes those layers, the request lifecycle, the data model, and the cross-cutting infrastructure.
 
 > For a per-module reference (responsibility, key functions, endpoints) see
 > [`BACKEND_MODULES.md`](BACKEND_MODULES.md). For the deletion/data-safety policy
@@ -63,7 +63,7 @@ One module per domain area. Each module owns both its HTTP-facing handler functi
 
 - `config.py` — runtime paths and shared constants; `configure_paths()` reassigns path globals at startup.
 - `migrations.py` — `init_db()` (baseline schema) and `run_migrations()` (forward-only, checksum-guarded).
-- `logging_setup.py` — rotating file + stderr logging on the `scrmonitor` logger.
+- `logging_setup.py` — rotating file + stderr logging on the `sqcclims` logger.
 - `backup.py` — startup SQLite backup using the online-backup API, with retention pruning.
 - `auth.py` — optional token auth + RBAC, off by default.
 
@@ -145,8 +145,8 @@ samples ─┬─ test_data
 - **SQLite WAL mode.** `connect_db()` opens each connection with `PRAGMA foreign_keys = ON`, `journal_mode = WAL`, `synchronous = NORMAL` — concurrent reads during writes, with foreign keys enforced.
 - **Startup backups.** `backup_database()` runs once at startup, copying the live DB into `data/backups/sample_testing_<timestamp>.db` via SQLite's online-backup API, retaining the **10** most recent and pruning the rest. Backup failure is logged and never blocks startup.
 - **Deletion-audit snapshots.** Deletes capture a full row snapshot into `deletion_audit` before removal (see above).
-- **Optional auth.** `auth.py` enforces token auth + RBAC only when `JIQT_AUTH_ENABLED` is truthy (and `JIQT_AUTH_DISABLED` is not). Default is OFF — `authorize()` is a no-op and the API behaves as if auth did not exist. Tokens come from `JIQT_API_TOKENS`; roles are admin/operator/viewer with GET≤operator-write≤admin-delete policy. All env vars are read at call time.
-- **Logging.** `logging_setup.setup_logging()` configures the `scrmonitor` logger with a rotating file handler (`data/logs/app.log`, 5 MB × 5) plus stderr; it is idempotent and must run after `configure_paths()`.
+- **Optional auth.** `auth.py` enforces token auth + RBAC only when `LIMS_AUTH_ENABLED` is truthy (and `LIMS_AUTH_DISABLED` is not). Default is OFF — `authorize()` is a no-op and the API behaves as if auth did not exist. Tokens come from `LIMS_API_TOKENS`; roles are admin/operator/viewer with GET≤operator-write≤admin-delete policy. All env vars are read at call time.
+- **Logging.** `logging_setup.setup_logging()` configures the `sqcclims` logger with a rotating file handler (`data/logs/app.log`, 5 MB × 5) plus stderr; it is idempotent and must run after `configure_paths()`.
 
 ## Migration system
 

@@ -1,8 +1,8 @@
 # Backend Modules
 
-A per-module reference for the SCRmonitor backend so a developer can understand
+A per-module reference for the SQCCLIMS backend so a developer can understand
 each module without reading source. Backend root:
-`SCRmonitor/SCRmonitor/`.
+`SCRmonitor/SQCCLIMS/`.
 
 For the layered design and request lifecycle see
 [`ARCHITECTURE.md`](ARCHITECTURE.md). For the deletion/data-safety policy see
@@ -28,8 +28,8 @@ start `ThreadingHTTPServer(AppHandler)` → write `<data-dir>/server.pid` →
 `serve_forever()`. On shutdown the pidfile is removed (a lingering pidfile after
 a crash is acceptable — `restore_db.py` verifies the PID is alive).
 
-**CLI / env:** `--host` (`JIQT_HOST`, default `0.0.0.0`), `--port` (`PORT`,
-default `8000`), `--data-dir` (`JIQT_DATA_DIR`).
+**CLI / env:** `--host` (`LIMS_HOST`, default `0.0.0.0`), `--port` (`PORT`,
+default `8000`), `--data-dir` (`LIMS_DATA_DIR`).
 
 **Depends on:** `app.config`, `app.logging_setup`, `app.migrations`,
 `app.backup`, `app.http.handler`.
@@ -109,7 +109,7 @@ paths from a `processing_jobs` output blob; `relative_output_path`/
 ## Infra layer
 
 ### `app/logging_setup.py`
-**Responsibility:** Configure the `scrmonitor` logger (rotating file + stderr).
+**Responsibility:** Configure the `sqcclims` logger (rotating file + stderr).
 Idempotent; must run after `configure_paths()`.
 **Key:** `setup_logging(level)` → install handlers (`data/logs/app.log`, 5 MB × 5);
 `get_logger(name)` → package/child logger.
@@ -133,8 +133,8 @@ failures are logged and never break an upload.
 ### `app/auth.py`
 **Responsibility:** Optional token auth + RBAC. **OFF by default** — `authorize`
 is a no-op unless explicitly enabled; only `/api/` paths are guarded.
-**Key functions:** `auth_enabled()` → read `JIQT_AUTH_ENABLED` /
-`JIQT_AUTH_DISABLED` at call time; `token_store()` → parse `JIQT_API_TOKENS`
+**Key functions:** `auth_enabled()` → read `LIMS_AUTH_ENABLED` /
+`LIMS_AUTH_DISABLED` at call time; `token_store()` → parse `LIMS_API_TOKENS`
 (`token:role,...`) into `{token: role}`; `authenticate(headers)` → role for the
 request's bearer / `X-API-Key` token; `authorize(method, path, headers)` →
 enforce per-method RBAC (GET≤viewer, POST/PUT/PATCH≤operator, DELETE=admin),
@@ -143,7 +143,7 @@ raising `AuthenticationError`/`AuthorizationError`.
 > `auth_status(headers)` backs `GET /api/auth/me` (allowlisted from `authorize()`):
 > `{auth_enabled, authenticated, role}`. The frontend uses it to show a login gate,
 > validate the pasted token, then attach `Authorization: Bearer` to every request.
-> Enabling `JIQT_AUTH_ENABLED` + `JIQT_API_TOKENS` works end-to-end; auth defaults OFF.
+> Enabling `LIMS_AUTH_ENABLED` + `LIMS_API_TOKENS` works end-to-end; auth defaults OFF.
 
 ### `app/deletion.py`
 **Responsibility:** Centralized file cleanup (the DB cascade can't touch files)
@@ -242,7 +242,7 @@ them. The handler dispatches to the functions named below.
 ### Mock endpoint gating
 `POST /api/parsed-data/mock` (`create_mock_parsed_data`) writes real
 `parsed_data` rows from arbitrary client JSON. The handler **returns 404 unless
-`JIQT_ENABLE_MOCK` is truthy** (`1`/`true`/`yes`/`on`). Keep it off in
+`LIMS_ENABLE_MOCK` is truthy** (`1`/`true`/`yes`/`on`). Keep it off in
 production; it is for tests/fixtures only.
 
 ---
@@ -308,15 +308,15 @@ Matches the [`README.md`](../README.md) configuration table.
 
 | Env var | Meaning | Default |
 |---------|---------|---------|
-| `JIQT_HOST` | bind host | `0.0.0.0` |
+| `LIMS_HOST` | bind host | `0.0.0.0` |
 | `PORT` | bind port | `8000` |
-| `JIQT_DATA_DIR` | runtime data directory | `SCRmonitor/data` |
-| `JIQT_ARCHIVE_DIR` | append-only upload archive directory | `<data-dir>/archive` |
-| `JIQT_AUTH_ENABLED` | turn token auth ON (truthy) | off |
-| `JIQT_AUTH_DISABLED` | hard-override that keeps auth OFF | off |
-| `JIQT_API_TOKENS` | `token:role,...` (roles: viewer/operator/admin) | empty |
-| `JIQT_ENABLE_MOCK` | enable `POST /api/parsed-data/mock` (404 otherwise) | off |
+| `LIMS_DATA_DIR` | runtime data directory | `SQCCLIMS/data` |
+| `LIMS_ARCHIVE_DIR` | append-only upload archive directory | `<data-dir>/archive` |
+| `LIMS_AUTH_ENABLED` | turn token auth ON (truthy) | off |
+| `LIMS_AUTH_DISABLED` | hard-override that keeps auth OFF | off |
+| `LIMS_API_TOKENS` | `token:role,...` (roles: viewer/operator/admin) | empty |
+| `LIMS_ENABLE_MOCK` | enable `POST /api/parsed-data/mock` (404 otherwise) | off |
 
-> Enabling auth: set `JIQT_AUTH_ENABLED=1` + `JIQT_API_TOKENS`; the frontend shows
+> Enabling auth: set `LIMS_AUTH_ENABLED=1` + `LIMS_API_TOKENS`; the frontend shows
 > a login screen, users paste their access token, and it is attached to all requests.
 > See the README "Enabling auth" section. Auth defaults OFF.

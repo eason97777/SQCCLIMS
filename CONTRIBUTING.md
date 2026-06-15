@@ -1,19 +1,19 @@
 # Contributing
 
-How to work on SCRmonitor. Read `docs/ARCHITECTURE.md` for the layer map and `docs/CODE_PRINCIPLES.md` for the conventions you must follow.
+How to work on SQCCLIMS. Read `docs/ARCHITECTURE.md` for the layer map and `docs/CODE_PRINCIPLES.md` for the conventions you must follow.
 
 ## Repository layout
 
-The application lives in a **nested** `SCRmonitor/SCRmonitor/` directory (repo root is the outer `SCRmonitor/`):
+The application lives in a **nested** `SCRmonitor/SQCCLIMS/` directory (repo root is the outer `SCRmonitor/`; the folder rename to `SQCCLIMS/` and de-nesting are part of the upcoming reorganize):
 
 ```
-SCRmonitor/                  # repo root
+SCRmonitor/                # repo root (rename to SQCCLIMS pending reorganize)
 ├── README.md
 ├── CONTRIBUTING.md          # this file
 ├── docs/                    # ARCHITECTURE, CODE_PRINCIPLES, GLOSSARY (+ legacy notes)
 ├── frontend/               # legacy/empty scaffold (the active SPA is nested below)
 ├── history/                # legacy snapshots — large, gitignored, never committed
-└── SCRmonitor/             # the app
+└── SQCCLIMS/             # the app
     ├── server.py           # thin entrypoint (~38 lines)
     ├── app/                # backend package
     │   ├── config.py, db.py, migrations.py, validation.py, errors.py,
@@ -27,7 +27,7 @@ SCRmonitor/                  # repo root
     └── tests/smoke_test.py # regression smoke test
 ```
 
-Unless noted otherwise, run backend commands from `SCRmonitor/SCRmonitor/`.
+Unless noted otherwise, run backend commands from `SCRmonitor/SQCCLIMS/`.
 
 ## Dev workflow
 
@@ -62,9 +62,9 @@ Auth is **off by default**. Turn it on with environment variables (read at start
 
 | Env var | Effect |
 |---------|--------|
-| `JIQT_AUTH_ENABLED=1` | enables token auth + RBAC for `/api/` paths |
-| `JIQT_AUTH_DISABLED=1` | hard override — keeps auth OFF even if enabled |
-| `JIQT_API_TOKENS` | `token1:admin,token2:operator,token3:viewer` |
+| `LIMS_AUTH_ENABLED=1` | enables token auth + RBAC for `/api/` paths |
+| `LIMS_AUTH_DISABLED=1` | hard override — keeps auth OFF even if enabled |
+| `LIMS_API_TOKENS` | `token1:admin,token2:operator,token3:viewer` |
 
 Roles and permissions: `viewer` (GET), `operator` (GET + POST/PUT/PATCH), `admin` (all, including DELETE). Clients send the token as `Authorization: Bearer <token>` or `X-API-Key: <token>`. Non-API paths (the SPA) are never guarded.
 

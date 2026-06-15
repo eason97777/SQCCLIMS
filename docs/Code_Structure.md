@@ -1,6 +1,6 @@
 # Code Structure
 
-This document explains the main directories and source files in SCRmonitor.
+This document explains the main directories and source files in SQCCLIMS.
 
 > For the layered backend design and request lifecycle, see
 > [`docs/ARCHITECTURE.md`](ARCHITECTURE.md). For a per-module backend reference
@@ -12,7 +12,7 @@ This document explains the main directories and source files in SCRmonitor.
 ## Top-Level Layout
 
 The application lives in a **nested** directory: the repo root is the outer
-`SCRmonitor/`; the app is the inner `SCRmonitor/SCRmonitor/`.
+`SQCCLIMS/`; the app is the inner `SCRmonitor/SQCCLIMS/`.
 
 - `README.md` — project overview, startup, configuration (env vars).
 - `CONTRIBUTING.md` — dev workflow, how to add an endpoint / migration.
@@ -22,9 +22,9 @@ The application lives in a **nested** directory: the repo root is the outer
   files, packaging output, and caches.
 - `frontend/` (outer) — legacy/empty scaffold; **not** the active app.
 - `history/` — legacy snapshots; gitignored, never committed.
-- `SCRmonitor/` (inner) — the active application (see below).
+- `SQCCLIMS/` (inner) — the active application (see below).
 
-## Backend (`SCRmonitor/SCRmonitor/`)
+## Backend (`SCRmonitor/SQCCLIMS/`)
 
 The backend is a layered Python package (standard library only). Dependency
 direction is low-level ← features ← http.
@@ -60,7 +60,7 @@ Runtime database files are not source code and must not be committed.
 
 ## Frontend
 
-The active frontend is `SCRmonitor/SCRmonitor/frontend` (React + TypeScript +
+The active frontend is `SCRmonitor/SQCCLIMS/frontend` (React + TypeScript +
 Vite). Important files:
 
 - `package.json` / `package-lock.json` — dependency graph.
@@ -74,7 +74,7 @@ Generated build output in `frontend/dist` must not be committed.
 
 ## Parsers And Data Processing
 
-`SCRmonitor/SCRmonitor/parsers/` contains backend-side parser and visualizer
+`SCRmonitor/SQCCLIMS/parsers/` contains backend-side parser and visualizer
 modules, invoked by the `parsing` / `visualization` features:
 
 - `resistance_csv_parser.py` — parse resistance CSV/XLSX into die/area records.
@@ -85,21 +85,21 @@ modules, invoked by the `parsing` / `visualization` features:
 
 ## Migrations
 
-`SCRmonitor/SCRmonitor/migrations/` contains forward-only, checksum-guarded
+`SCRmonitor/SQCCLIMS/migrations/` contains forward-only, checksum-guarded
 SQLite migration files (`NNN_description.sql`) and a `README.md` with the rules.
 Migration files are source-controlled; runtime database files are not. See
 [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) and `migrations/README.md`.
 
 ## Templates
 
-`SCRmonitor/SCRmonitor/templates/` holds downloadable import templates shipped
+`SCRmonitor/SQCCLIMS/templates/` holds downloadable import templates shipped
 with the app (e.g. `cd_sem_template.csv`). These are source templates, not
 runtime uploads.
 
 ## Tools And Packaging
 
-- `SCRmonitor/SCRmonitor/tools/` — utility scripts (e.g. local-open helpers).
-- `SCRmonitor/SCRmonitor/packaging/` — build/install scripts, service config,
+- `SCRmonitor/SQCCLIMS/tools/` — utility scripts (e.g. local-open helpers).
+- `SCRmonitor/SQCCLIMS/packaging/` — build/install scripts, service config,
   installer scripts, packaging docs. Generated package output
   (`packaging/output/`, `packaging/staging/`, installer binaries) is not source.
 
@@ -107,7 +107,7 @@ runtime uploads.
 
 These are runtime-only and must not be committed (only `.gitkeep` placeholders):
 
-- `SCRmonitor/SCRmonitor/data/` — `sample_testing.db`, `uploads/`, `outputs/`,
+- `SCRmonitor/SQCCLIMS/data/` — `sample_testing.db`, `uploads/`, `outputs/`,
   `logs/`, `backups/`, `archive/`.
 - frontend build output, dependency folders, Python cache folders, and any real
   experimental or business data.

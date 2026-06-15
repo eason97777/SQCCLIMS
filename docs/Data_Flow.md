@@ -1,10 +1,10 @@
 # Data Flow
 
-This document summarizes how data moves through JIQT_2.
+This document summarizes how data moves through SQCCLIMS.
 
 ## Sample Creation
 
-Users create and maintain samples through frontend sample pages. The frontend calls backend API endpoints from modules in `SCRmonitor/frontend/src/api/`. The backend validates request data, writes records to SQLite, and returns normalized JSON responses to the frontend.
+Users create and maintain samples through frontend sample pages. The frontend calls backend API endpoints from modules in `SQCCLIMS/frontend/src/api/`. The backend validates request data, writes records to SQLite, and returns normalized JSON responses to the frontend.
 
 Sample records are stored in the SQLite database located under the configured runtime data directory.
 
@@ -13,16 +13,16 @@ Sample records are stored in the SQLite database located under the configured ru
 Raw Data workflows begin in the frontend Raw Data page. Users create Raw Data records and upload files associated with those records. Uploaded files are written under the runtime upload directory, usually beneath:
 
 ```text
-SCRmonitor/data/uploads/
+SQCCLIMS/data/uploads/
 ```
 
-or the directory configured by `JIQT_DATA_DIR`.
+or the directory configured by `LIMS_DATA_DIR`.
 
 Uploaded files are runtime/business data and must not be committed.
 
 ## Parser Processing
 
-Parser modules in `SCRmonitor/parsers/` process supported measurement file formats. The backend calls these modules after upload or when a parse/visualization endpoint is requested.
+Parser modules in `SQCCLIMS/parsers/` process supported measurement file formats. The backend calls these modules after upload or when a parse/visualization endpoint is requested.
 
 Current parser responsibilities include:
 
@@ -41,12 +41,12 @@ The database is runtime state and must not be uploaded.
 
 > **Test-only mock endpoint.** `POST /api/parsed-data/mock` writes `parsed_data`
 > rows directly from arbitrary client JSON. It is **disabled by default** and
-> returns **404** unless the environment variable `JIQT_ENABLE_MOCK` is truthy
+> returns **404** unless the environment variable `LIMS_ENABLE_MOCK` is truthy
 > (`1`/`true`/`yes`/`on`). Keep it off in production.
 
 ## Frontend API Consumption
 
-Frontend API wrappers live in `SCRmonitor/frontend/src/api/`. Page and component code calls these wrappers to load and update:
+Frontend API wrappers live in `SQCCLIMS/frontend/src/api/`. Page and component code calls these wrappers to load and update:
 
 - samples
 - test data
@@ -59,11 +59,11 @@ Frontend API wrappers live in `SCRmonitor/frontend/src/api/`. Page and component
 - dashboard summaries
 - MES route templates and flow records
 
-The frontend consumes JSON from the backend and renders feature-specific pages under `SCRmonitor/frontend/src/pages/`.
+The frontend consumes JSON from the backend and renders feature-specific pages under `SQCCLIMS/frontend/src/pages/`.
 
 ## Runtime File Storage
 
-The backend runtime directory is controlled by `JIQT_DATA_DIR` or defaults to `SCRmonitor/data`.
+The backend runtime directory is controlled by `LIMS_DATA_DIR` or defaults to `SQCCLIMS/data`.
 
 Expected runtime subdirectories include:
 
@@ -72,7 +72,7 @@ Expected runtime subdirectories include:
 - `logs/` for runtime logs
 - `backups/` for local backups when created
 
-Only placeholder `.gitkeep` files should be committed under `SCRmonitor/data`.
+Only placeholder `.gitkeep` files should be committed under `SQCCLIMS/data`.
 
 ## Generated Files That Must Not Be Committed
 
@@ -176,7 +176,7 @@ Before any destructive action the system guarantees a recoverable checkpoint:
   `create_performance_dataset`, `create_characterization_files`) is copied into
   an archive keyed by its **SHA-256** content hash. Identical content is stored
   once (automatic deduplication); the existing `raw_data_files.sha256` is reused.
-- **Where:** a configurable directory, `JIQT_ARCHIVE_DIR` (default
+- **Where:** a configurable directory, `LIMS_ARCHIVE_DIR` (default
   `<data-dir>/archive`). It may live on a larger/separate disk.
 - **Lifetime:** **append-only and never auto-pruned.** Uploaded measurement
   files are write-once, so the archive is the durable source of truth for raw

@@ -22,12 +22,12 @@ env/
 
 # === Node / frontend build artifacts ===
 node_modules/
-SCRmonitor/frontend/dist/
+SQCCLIMS/frontend/dist/
 frontend/dist/
-SCRmonitor/static/
+SQCCLIMS/static/
 
 # === Runtime data — NEVER commit lab data, uploads, outputs, or the DB ===
-SCRmonitor/data/
+SQCCLIMS/data/
 data/
 *.db
 *.sqlite
@@ -40,7 +40,7 @@ data/
 logs/
 
 # === Backups produced by the data-safety layer ===
-SCRmonitor/data/backups/
+SQCCLIMS/data/backups/
 backups/
 
 # === Legacy snapshots (156MB of old copies kept on disk, out of version control) ===
