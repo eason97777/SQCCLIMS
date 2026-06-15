@@ -2,6 +2,7 @@ import cgi
 import json
 import mimetypes
 import shutil
+import time
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs
@@ -9,6 +10,7 @@ from urllib.parse import quote
 from urllib.parse import urlparse
 
 import app.config as config
+from app.logging_setup import get_logger
 from app.errors import ConflictError
 from app.db import connect_db
 from app.features.characterization import characterization_file_path, create_characterization_collection, create_characterization_files, delete_characterization_file, get_characterization_collection, get_characterization_file, get_characterization_files, get_characterization_samples, get_characterization_tree
@@ -25,8 +27,17 @@ from app.features.visualization import get_processing_jobs, get_resistance_summa
 from app.storage import raw_data_upload_file_path, resolve_data_path
 
 
+logger = get_logger("http")
+
+
 class AppHandler(BaseHTTPRequestHandler):
     server_version = "SampleTestingCenter/1.0"
+
+    def send_response(self, code, message=None):
+        # Capture the response status for access logging without altering
+        # the response itself.
+        self._response_status = code
+        super().send_response(code, message)
 
     def do_GET(self):
         self.route("GET")
@@ -47,6 +58,8 @@ class AppHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         query = parse_qs(parsed.query)
+        self._response_status = None
+        start = time.monotonic()
         try:
             if path.startswith("/api/"):
                 self.handle_api(method, path, query)
@@ -59,7 +72,14 @@ class AppHandler(BaseHTTPRequestHandler):
         except ConflictError as exc:
             self.send_json({"error": str(exc)}, status=409)
         except Exception as exc:
+            logger.exception("unhandled error handling %s %s", method, path)
             self.send_json({"error": "internal server error", "detail": str(exc)}, status=500)
+        finally:
+            duration_ms = (time.monotonic() - start) * 1000.0
+            status = self._response_status if self._response_status is not None else "-"
+            logger.info(
+                "%s %s status=%s duration_ms=%.1f", method, path, status, duration_ms
+            )
 
     def read_json(self):
         length = int(self.headers.get("Content-Length", "0"))
@@ -454,4 +474,7 @@ class AppHandler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def log_message(self, format, *args):
-        print("[%s] %s" % (self.log_date_time_string(), format % args))
+        # Route BaseHTTPRequestHandler's default stderr logging through our
+        # logger at DEBUG so it does not duplicate the access log line emitted
+        # by route(). Demoted to DEBUG to avoid double noise at INFO level.
+        logger.debug(format % args)

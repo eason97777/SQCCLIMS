@@ -10,6 +10,7 @@ import os
 from http.server import ThreadingHTTPServer
 
 import app.config as config
+from app.logging_setup import setup_logging
 from app.migrations import init_db, run_migrations
 from app.http.handler import AppHandler
 
@@ -26,9 +27,11 @@ def main():
     config.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     config.LOG_DIR.mkdir(parents=True, exist_ok=True)
+    logger = setup_logging()
     init_db()
     run_migrations()
     server = ThreadingHTTPServer((args.host, args.port), AppHandler)
+    logger.info("starting server host=%s port=%s db=%s", args.host, args.port, config.DB_PATH)
     print(f"Serving sample testing center at http://{args.host}:{args.port}")
     print(f"SQLite database: {config.DB_PATH}")
     server.serve_forever()
