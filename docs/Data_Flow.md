@@ -197,3 +197,29 @@ restores from the archive/backup, guided by `deletion_audit`.
 | `test_data` (one point) | Simple | none | none | DB backup / `deletion_audit` |
 | `mes_route_step` | Strong | sample steps + events | none | DB backup |
 
+## Backup & restore operations
+
+There are two recovery stores and a restore tool:
+
+- **DB snapshots** — full copies of the database written by `app/backup.py`
+  (`backup_database()`) to `<data-dir>/backups/sample_testing_<timestamp>.db`,
+  at startup and before strong-tier deletes; the newest 10 are kept.
+- **Upload archive** — append-only, content-addressed file store (see above);
+  not pruned.
+
+**Restoring the database** (`scripts/restore_db.py`): the server must be stopped
+first (the DB must not be in use). The tool lists snapshots, snapshots the
+*current* DB to `backups/pre_restore_*.db` (so a restore is itself reversible),
+copies the chosen snapshot over the live DB, and **clears the `-wal`/`-shm`
+sidecar files** so the restored copy is not merged with stale write-ahead frames.
+
+```text
+python3 scripts/restore_db.py --list                 # show available snapshots
+python3 scripts/restore_db.py --latest               # restore the most recent
+python3 scripts/restore_db.py --file <name> --yes    # restore a specific one
+```
+
+Manual equivalent (if not using the script): stop the server, copy the chosen
+`backups/*.db` over `sample_testing.db`, delete `sample_testing.db-wal` and
+`sample_testing.db-shm`, restart.
+
