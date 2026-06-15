@@ -1,5 +1,5 @@
 
-from app.db import connect_db
+from app.db import connect_db, record_deletion
 from app.validation import normalize_sample_text, now_iso, optional_text, row_dict, rows_dict
 
 
@@ -477,6 +477,8 @@ def delete_mes_route_step(step_id):
         if not step:
             raise LookupError("MES route step not found")
 
+        step_row = conn.execute("SELECT * FROM mes_route_steps WHERE id = ?", (step_id,)).fetchone()
+        record_deletion(conn, "mes_route_steps", step_row)
         conn.execute("DELETE FROM mes_route_steps WHERE id = ?", (step_id,))
         siblings = conn.execute(
             """

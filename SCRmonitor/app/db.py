@@ -1,3 +1,4 @@
+import json
 import sqlite3
 
 import app.config as config
@@ -8,7 +9,29 @@ def connect_db():
     conn = sqlite3.connect(config.DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
     return conn
+
+def record_deletion(conn, table_name, row, pk_field="id"):
+    from app.validation import now_iso
+
+    if row is None:
+        return
+    snapshot = dict(row) if not isinstance(row, dict) else row
+    row_pk = snapshot.get(pk_field)
+    conn.execute(
+        """
+        INSERT INTO deletion_audit (table_name, row_pk, snapshot_json, deleted_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (
+            table_name,
+            None if row_pk is None else str(row_pk),
+            json.dumps(snapshot, ensure_ascii=False, default=str),
+            now_iso(),
+        ),
+    )
 
 def ensure_schema_migrations(conn):
     conn.execute(

@@ -1,7 +1,7 @@
 import sqlite3
 from datetime import datetime
 
-from app.db import connect_db
+from app.db import connect_db, record_deletion
 from app.validation import has_garbled_text, has_only_punctuation, normalize_sample_text, now_iso, optional_text, require_text, row_dict, rows_dict
 
 
@@ -224,6 +224,10 @@ def update_sample(sample_id, payload):
 
 def delete_sample(sample_id):
     with connect_db() as conn:
+        row = conn.execute("SELECT * FROM samples WHERE id = ?", (sample_id,)).fetchone()
+        if row is None:
+            raise LookupError("sample not found")
+        record_deletion(conn, "samples", row)
         cursor = conn.execute("DELETE FROM samples WHERE id = ?", (sample_id,))
         if cursor.rowcount == 0:
             raise LookupError("sample not found")

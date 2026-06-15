@@ -1,5 +1,5 @@
 
-from app.db import connect_db
+from app.db import connect_db, record_deletion
 from app.features.samples import sample_exists
 from app.validation import now_iso, optional_text, parse_float, require_text, row_dict, rows_dict
 
@@ -133,6 +133,10 @@ def bulk_create_test_data(payload):
 
 def delete_test_data(record_id):
     with connect_db() as conn:
+        row = conn.execute("SELECT * FROM test_data WHERE id = ?", (record_id,)).fetchone()
+        if row is None:
+            raise LookupError("test data not found")
+        record_deletion(conn, "test_data", row)
         cursor = conn.execute("DELETE FROM test_data WHERE id = ?", (record_id,))
         if cursor.rowcount == 0:
             raise LookupError("test data not found")

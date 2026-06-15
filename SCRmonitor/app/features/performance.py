@@ -1,7 +1,7 @@
 import uuid
 
 import app.config as config
-from app.db import connect_db
+from app.db import connect_db, record_deletion
 from app.features.samples import get_sample_row
 from app.storage import remove_stored_path, save_uploaded_file, storage_path_for
 from app.validation import now_iso, optional_text, require_text, row_dict, rows_dict, safe_path_part
@@ -158,9 +158,10 @@ def create_performance_dataset(fields, files):
 
 def delete_performance_dataset(dataset_id):
     with connect_db() as conn:
-        row = conn.execute("SELECT storage_dir FROM performance_datasets WHERE id = ?", (dataset_id,)).fetchone()
+        row = conn.execute("SELECT * FROM performance_datasets WHERE id = ?", (dataset_id,)).fetchone()
         if row is None:
             raise LookupError("performance dataset not found")
+        record_deletion(conn, "performance_datasets", row)
         conn.execute("DELETE FROM performance_datasets WHERE id = ?", (dataset_id,))
     remove_stored_path(row["storage_dir"])
     return {"deleted": dataset_id}

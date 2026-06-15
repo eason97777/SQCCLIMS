@@ -10,6 +10,7 @@ import os
 from http.server import ThreadingHTTPServer
 
 import app.config as config
+from app.backup import backup_database
 from app.logging_setup import setup_logging
 from app.migrations import init_db, run_migrations
 from app.http.handler import AppHandler
@@ -30,6 +31,7 @@ def main():
     logger = setup_logging()
     init_db()
     run_migrations()
+    backup_database()
     server = ThreadingHTTPServer((args.host, args.port), AppHandler)
     logger.info("starting server host=%s port=%s db=%s", args.host, args.port, config.DB_PATH)
     print(f"Serving sample testing center at http://{args.host}:{args.port}")

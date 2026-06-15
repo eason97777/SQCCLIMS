@@ -8,7 +8,7 @@ from pathlib import Path
 
 import app.config as config
 from app.errors import ConflictError
-from app.db import connect_db
+from app.db import connect_db, record_deletion
 from app.features.characterization import preview_type_for_file
 from app.features.samples import build_sample_display_code, generate_sample_uid, get_sample_row
 from app.storage import ensure_upload_root, file_sha256, raw_data_upload_file_path, resolve_data_path, storage_path_for
@@ -289,6 +289,8 @@ def delete_raw_data(raw_data_id):
             "SELECT file_path FROM raw_data_files WHERE raw_data_id = ?",
             (raw_data_id,),
         ).fetchall()
+        raw_data_full = conn.execute("SELECT * FROM raw_data WHERE id = ?", (raw_data_id,)).fetchone()
+        record_deletion(conn, "raw_data", raw_data_full)
         conn.execute("DELETE FROM processing_jobs WHERE raw_data_id = ?", (raw_data_id,))
         conn.execute("DELETE FROM parsed_records WHERE raw_data_id = ?", (raw_data_id,))
         conn.execute("DELETE FROM parsed_data WHERE raw_data_id = ?", (raw_data_id,))
@@ -337,6 +339,7 @@ def delete_raw_data_file(file_id):
         conn.execute("DELETE FROM processing_jobs WHERE raw_data_id = ?", (raw_data_id,))
         conn.execute("DELETE FROM parsed_records WHERE raw_data_id = ?", (raw_data_id,))
         conn.execute("DELETE FROM parsed_data WHERE raw_data_id = ?", (raw_data_id,))
+        record_deletion(conn, "raw_data_files", file_record)
         conn.execute("DELETE FROM raw_data_files WHERE id = ?", (file_id,))
         conn.execute(
             """
