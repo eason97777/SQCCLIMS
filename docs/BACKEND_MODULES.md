@@ -140,8 +140,10 @@ request's bearer / `X-API-Key` token; `authorize(method, path, headers)` →
 enforce per-method RBAC (GET≤viewer, POST/PUT/PATCH≤operator, DELETE=admin),
 raising `AuthenticationError`/`AuthorizationError`.
 **Used by:** `http/handler.route()`.
-> The frontend sends no token and has no login UI, so enabling auth breaks the
-> app today (every `/api/` call → 401). Keep it OFF until a login layer exists.
+> `auth_status(headers)` backs `GET /api/auth/me` (allowlisted from `authorize()`):
+> `{auth_enabled, authenticated, role}`. The frontend uses it to show a login gate,
+> validate the pasted token, then attach `Authorization: Bearer` to every request.
+> Enabling `JIQT_AUTH_ENABLED` + `JIQT_API_TOKENS` works end-to-end; auth defaults OFF.
 
 ### `app/deletion.py`
 **Responsibility:** Centralized file cleanup (the DB cascade can't touch files)
@@ -315,5 +317,6 @@ Matches the [`README.md`](../README.md) configuration table.
 | `JIQT_API_TOKENS` | `token:role,...` (roles: viewer/operator/admin) | empty |
 | `JIQT_ENABLE_MOCK` | enable `POST /api/parsed-data/mock` (404 otherwise) | off |
 
-> ⚠️ Do not enable `JIQT_AUTH_ENABLED` yet — the frontend sends no token and has
-> no login UI, so auth makes every `/api/` call fail with 401.
+> Enabling auth: set `JIQT_AUTH_ENABLED=1` + `JIQT_API_TOKENS`; the frontend shows
+> a login screen, users paste their access token, and it is attached to all requests.
+> See the README "Enabling auth" section. Auth defaults OFF.

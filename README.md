@@ -106,10 +106,21 @@ Boots the server against a throwaway temp data directory, exercises the key read
 
 Auth is **disabled by default**; see `docs/ARCHITECTURE.md` and `CONTRIBUTING.md` for details.
 
-> ⚠️ **Do not enable `JIQT_AUTH_ENABLED` yet.** The current frontend sends **no
-> token** and has **no login UI**, so turning auth on makes every `/api/` call
-> fail with **401** and the app stops working. Auth must stay **OFF** until a
-> token/login layer is built into the frontend.
+### Enabling auth
+
+The frontend supports token auth. To turn it on:
+
+1. Set `JIQT_AUTH_ENABLED=1` and `JIQT_API_TOKENS="<token>:admin,<token>:operator,<token>:viewer"`.
+2. Restart the server and open the app — it shows a **login screen**. Each user
+   pastes their access token; the frontend validates it via `GET /api/auth/me`,
+   stores it (localStorage), and attaches it (`Authorization: Bearer`) to every
+   request (including file downloads). A role badge + **Logout** appear in the top bar.
+3. RBAC: `GET` needs `viewer`+, `POST/PUT/PATCH` need `operator`+, `DELETE` needs
+   `admin`. An expired/invalid token returns the user to the login screen (401);
+   an insufficient role surfaces a permission error (403).
+
+When auth is OFF (default), no login is shown and no token is sent — behaviour is
+unchanged. `JIQT_AUTH_DISABLED=1` hard-forces auth off even if enabled.
 
 ## Documentation
 
