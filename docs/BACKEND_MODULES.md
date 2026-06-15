@@ -1,8 +1,7 @@
 # Backend Modules
 
 A per-module reference for the SQCCLIMS backend so a developer can understand
-each module without reading source. Backend root:
-`SCRmonitor/SQCCLIMS/`.
+each module without reading source. Backend root: the repo root.
 
 For the layered design and request lifecycle see
 [`ARCHITECTURE.md`](ARCHITECTURE.md). For the deletion/data-safety policy see
@@ -310,7 +309,7 @@ Matches the [`README.md`](../README.md) configuration table.
 |---------|---------|---------|
 | `LIMS_HOST` | bind host | `0.0.0.0` |
 | `PORT` | bind port | `8000` |
-| `LIMS_DATA_DIR` | runtime data directory | `SQCCLIMS/data` |
+| `LIMS_DATA_DIR` | runtime data directory | `data` |
 | `LIMS_ARCHIVE_DIR` | append-only upload archive directory | `<data-dir>/archive` |
 | `LIMS_AUTH_ENABLED` | turn token auth ON (truthy) | off |
 | `LIMS_AUTH_DISABLED` | hard-override that keeps auth OFF | off |

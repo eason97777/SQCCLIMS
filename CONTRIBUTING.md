@@ -4,30 +4,28 @@ How to work on SQCCLIMS. Read `docs/ARCHITECTURE.md` for the layer map and `docs
 
 ## Repository layout
 
-The application lives in a **nested** `SCRmonitor/SQCCLIMS/` directory (repo root is the outer `SCRmonitor/`; the folder rename to `SQCCLIMS/` and de-nesting are part of the upcoming reorganize):
+The application lives directly at the repo root (`SQCCLIMS/`):
 
 ```
-SCRmonitor/                # repo root (rename to SQCCLIMS pending reorganize)
+SQCCLIMS/                  # repo root
 ├── README.md
 ├── CONTRIBUTING.md          # this file
 ├── docs/                    # ARCHITECTURE, CODE_PRINCIPLES, GLOSSARY (+ legacy notes)
-├── frontend/               # legacy/empty scaffold (the active SPA is nested below)
-├── history/                # legacy snapshots — large, gitignored, never committed
-└── SQCCLIMS/             # the app
-    ├── server.py           # thin entrypoint (~38 lines)
-    ├── app/                # backend package
-    │   ├── config.py, db.py, migrations.py, validation.py, errors.py,
-    │   │   storage.py, logging_setup.py, backup.py, auth.py
-    │   ├── http/handler.py # AppHandler: routing + dispatch
-    │   └── features/       # one module per domain area
-    ├── parsers/            # resistance + CD/SEM parsers and visualizers
-    ├── migrations/         # forward-only SQL migrations
-    ├── frontend/           # React + TS + Vite SPA (active)
-    ├── templates/          # downloadable import templates
-    └── tests/smoke_test.py # regression smoke test
+├── server.py               # thin entrypoint (~38 lines)
+├── app/                    # backend package
+│   ├── config.py, db.py, migrations.py, validation.py, errors.py,
+│   │   storage.py, logging_setup.py, backup.py, auth.py
+│   ├── http/handler.py     # AppHandler: routing + dispatch
+│   └── features/           # one module per domain area
+├── parsers/                # resistance + CD/SEM parsers and visualizers
+├── migrations/             # forward-only SQL migrations
+├── frontend/               # React + TS + Vite SPA (active)
+├── templates/              # downloadable import templates
+├── tests/smoke_test.py     # regression smoke test
+└── history/                # legacy snapshots — large, gitignored, never committed
 ```
 
-Unless noted otherwise, run backend commands from `SCRmonitor/SQCCLIMS/`.
+Unless noted otherwise, run backend commands from the repo root.
 
 ## Dev workflow
 

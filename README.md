@@ -20,32 +20,30 @@ SQCCLIMS is a locally-run **LIMS/MES** for a semiconductor / materials sample-te
 | Frontend | **React 19 + TypeScript + Vite** single-page app |
 | Parsers/visualizers | `parsers/` package (resistance + CD/SEM), invoked from the backend |
 
-The backend is intentionally dependency-free so it can be packaged and run on a lab workstation with just a Python install. Spreadsheet support (XLSX) is the one optional dependency declared in `SQCCLIMS/requirements.txt`.
+The backend is intentionally dependency-free so it can be packaged and run on a lab workstation with just a Python install. Spreadsheet support (XLSX) is the one optional dependency declared in `requirements.txt`.
 
 ## Repository layout
 
 ```
-SCRmonitor/               # repo root (folder rename to SQCCLIMS pending reorganize)
+SQCCLIMS/                 # repo root
 ├── README.md               # this file
 ├── CONTRIBUTING.md         # dev workflow, adding endpoints / migrations
 ├── docs/                   # ARCHITECTURE, CODE_PRINCIPLES, GLOSSARY (+ legacy notes)
-├── frontend/               # (legacy/empty scaffold — active SPA is below)
-├── history/                # legacy snapshots, gitignored
-└── SQCCLIMS/             # the application
-    ├── server.py           # thin entrypoint
-    ├── app/                # backend package (config, db, http, features, …)
-    ├── parsers/            # resistance + CD/SEM parsers and visualizers
-    ├── migrations/         # forward-only SQL migrations
-    ├── frontend/           # React + TS + Vite SPA (active)
-    ├── templates/          # downloadable import templates
-    └── tests/smoke_test.py # regression smoke test
+├── server.py               # thin entrypoint
+├── app/                    # backend package (config, db, http, features, …)
+├── parsers/                # resistance + CD/SEM parsers and visualizers
+├── migrations/             # forward-only SQL migrations
+├── frontend/               # React + TS + Vite SPA (active)
+├── templates/              # downloadable import templates
+├── tests/smoke_test.py     # regression smoke test
+└── history/                # legacy snapshots, gitignored
 ```
 
 ## Quickstart
 
 ### Backend
 
-From `SCRmonitor/SQCCLIMS/`:
+From the repo root:
 
 ```bash
 python3 server.py --host 127.0.0.1 --port 8000
@@ -63,7 +61,7 @@ pip install -r requirements.txt
 
 ### Frontend
 
-From `SCRmonitor/SQCCLIMS/frontend/`:
+From `frontend/`:
 
 ```bash
 npm install
@@ -78,7 +76,7 @@ The backend serves the production build from `frontend/dist`. For a fully workin
 
 All runtime state lives under the **data directory**:
 
-- default: `SCRmonitor/SQCCLIMS/data/`
+- default: `data/`
 - override with `--data-dir DIR` or the `LIMS_DATA_DIR` environment variable.
 
 Subdirectories: `sample_testing.db` (the SQLite database), `uploads/`, `outputs/`, `logs/`, `backups/`. None of this is committed to git — only `.gitkeep` placeholders are.
@@ -86,7 +84,7 @@ Subdirectories: `sample_testing.db` (the SQLite database), `uploads/`, `outputs/
 ### Smoke test
 
 ```bash
-python3 tests/smoke_test.py        # from SCRmonitor/SQCCLIMS/
+python3 tests/smoke_test.py        # from the repo root
 ```
 
 Boots the server against a throwaway temp data directory, exercises the key read endpoints plus one create round-trip, and exits non-zero on any regression. Keep it green.
@@ -97,7 +95,7 @@ Boots the server against a throwaway temp data directory, exercises the key read
 |---------|---------|---------|
 | `LIMS_HOST` | bind host | `0.0.0.0` |
 | `PORT` | bind port | `8000` |
-| `LIMS_DATA_DIR` | runtime data directory | `SQCCLIMS/data` |
+| `LIMS_DATA_DIR` | runtime data directory | `data` |
 | `LIMS_ARCHIVE_DIR` | append-only upload archive directory (may live on a separate/larger disk) | `<data-dir>/archive` |
 | `LIMS_AUTH_ENABLED` | turn token auth ON (truthy: `1`/`true`/`yes`) | off |
 | `LIMS_AUTH_DISABLED` | hard-override that keeps auth OFF even if enabled | off |
@@ -130,4 +128,4 @@ unchanged. `LIMS_AUTH_DISABLED=1` hard-forces auth off even if enabled.
 - [`docs/CODE_PRINCIPLES.md`](docs/CODE_PRINCIPLES.md) — conventions for humans and coding agents.
 - [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — plain-language definitions of domain and tech terms.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — dev workflow, adding endpoints, adding migrations.
-- [`SQCCLIMS/migrations/README.md`](SQCCLIMS/migrations/README.md) — migration mechanics.
+- [`migrations/README.md`](migrations/README.md) — migration mechanics.

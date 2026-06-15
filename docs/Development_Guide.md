@@ -4,10 +4,9 @@ This guide covers local setup, development commands, environment variables, pars
 
 ## Backend Setup
 
-From the project root:
+From the repo root:
 
 ```powershell
-cd SQCCLIMS
 python -m pip install -r requirements.txt
 ```
 
@@ -24,7 +23,7 @@ The backend initializes SQLite and applies migrations on startup.
 Install frontend dependencies:
 
 ```powershell
-cd SQCCLIMS/frontend
+cd frontend
 npm install
 ```
 
@@ -40,7 +39,7 @@ Build production frontend assets:
 npm run build
 ```
 
-The production build is generated in `SQCCLIMS/frontend/dist` and should not be committed.
+The production build is generated in `frontend/dist` and should not be committed.
 
 ## Environment Variables
 
@@ -57,10 +56,10 @@ configuration, or local-only secrets. Do not commit `.env`.
 For development, use a local runtime data directory that is ignored by Git. The repository includes placeholder `.gitkeep` files under:
 
 ```text
-SQCCLIMS/data/
-SQCCLIMS/data/uploads/
-SQCCLIMS/data/outputs/
-SQCCLIMS/data/logs/
+data/
+data/uploads/
+data/outputs/
+data/logs/
 ```
 
 Only the placeholders should be committed. Real runtime contents must stay local.
@@ -70,34 +69,33 @@ Only the placeholders should be committed. Real runtime contents must stay local
 Backend:
 
 ```powershell
-cd SQCCLIMS
 python server.py --host 0.0.0.0 --port 8000 --data-dir .\data
 ```
 
 Frontend development:
 
 ```powershell
-cd SQCCLIMS/frontend
+cd frontend
 npm run dev
 ```
 
 Frontend build:
 
 ```powershell
-cd SQCCLIMS/frontend
+cd frontend
 npm run build
 ```
 
 Frontend lint:
 
 ```powershell
-cd SQCCLIMS/frontend
+cd frontend
 npm run lint
 ```
 
 ## Adding Or Modifying Parser Logic
 
-Parser source lives in `SQCCLIMS/parsers/`.
+Parser source lives in `parsers/`.
 
 When changing parser behavior:
 
@@ -105,13 +103,13 @@ When changing parser behavior:
 2. Keep generated charts, reports, and intermediate files in the runtime output directory.
 3. Do not commit uploaded files or real experimental datasets used for manual testing.
 4. Update documentation when adding a new supported file format or changing expected input templates.
-5. Add or update templates in `SQCCLIMS/templates/` only when they are safe examples or required source templates.
+5. Add or update templates in `templates/` only when they are safe examples or required source templates.
 
 ## Database And Migration Changes
 
-Schema changes should be represented as new migration files under `SQCCLIMS/migrations/`. Do not edit already-applied migrations after they are in shared use. Do not commit local SQLite databases.
+Schema changes should be represented as new migration files under `migrations/`. Do not edit already-applied migrations after they are in shared use. Do not commit local SQLite databases.
 
-See `SQCCLIMS/migrations/README.md` for migration-specific rules.
+See `migrations/README.md` for migration-specific rules.
 
 ## Safe Git Checks Before Commit
 
