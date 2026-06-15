@@ -11,7 +11,8 @@ from urllib.parse import urlparse
 
 import app.config as config
 from app.logging_setup import get_logger
-from app.errors import ConflictError
+from app.errors import AuthenticationError, AuthorizationError, ConflictError
+from app.auth import authorize
 from app.db import connect_db
 from app.features.characterization import characterization_file_path, create_characterization_collection, create_characterization_files, delete_characterization_file, get_characterization_collection, get_characterization_file, get_characterization_files, get_characterization_samples, get_characterization_tree
 from app.features.mes import advance_mes_sample_route, create_mes_route_layer, create_mes_route_step, create_mes_route_template, create_mes_sample_route, delete_mes_route_step, get_mes_route_template_by_project, get_mes_route_template_detail, get_mes_route_templates, get_mes_sample_route_by_sample, update_mes_route_step
@@ -61,12 +62,17 @@ class AppHandler(BaseHTTPRequestHandler):
         self._response_status = None
         start = time.monotonic()
         try:
+            authorize(method, path, self.headers)
             if path.startswith("/api/"):
                 self.handle_api(method, path, query)
             else:
                 self.serve_static(path)
         except ValueError as exc:
             self.send_json({"error": str(exc)}, status=400)
+        except AuthenticationError as exc:
+            self.send_json({"error": str(exc)}, status=401)
+        except AuthorizationError as exc:
+            self.send_json({"error": str(exc)}, status=403)
         except LookupError as exc:
             self.send_json({"error": str(exc)}, status=404)
         except ConflictError as exc:
