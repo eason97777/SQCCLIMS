@@ -2,6 +2,10 @@
 
 SCRmonitor's backend is a small, dependency-free Python application organized into clear layers. This document describes those layers, the request lifecycle, the data model, and the cross-cutting infrastructure.
 
+> For a per-module reference (responsibility, key functions, endpoints) see
+> [`BACKEND_MODULES.md`](BACKEND_MODULES.md). For the deletion/data-safety policy
+> see [`Data_Flow.md`](Data_Flow.md).
+
 ## Layered overview
 
 ```

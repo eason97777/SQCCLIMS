@@ -44,15 +44,13 @@ The production build is generated in `SCRmonitor/frontend/dist` and should not b
 
 ## Environment Variables
 
-Use `.env.example` as the safe reference. Do not commit `.env`.
+The supported environment variables and their defaults are documented in the
+repository [`README.md`](../README.md) (there is no `.env.example`). They cover
+the bind host/port, the runtime data and archive directories, optional token
+auth, and the test-only mock endpoint toggle.
 
-Supported variables:
-
-- `JIQT_HOST`: optional backend bind host.
-- `PORT`: optional backend port.
-- `JIQT_DATA_DIR`: optional runtime data directory.
-
-Never commit real API keys, tokens, passwords, credentials, private configuration, or local-only secrets.
+Never commit real API keys, tokens, passwords, credentials, private
+configuration, or local-only secrets. Do not commit `.env`.
 
 ## Local Data Directory Setup
 
@@ -126,8 +124,7 @@ git add -n .
 
 The dry-run staging list should not include:
 
-- `.env`
-- secrets, tokens, credentials, or private config
+- `.env` or any secrets, tokens, credentials, or private config
 - SQLite databases
 - runtime uploads, outputs, logs, exports, reports, artifacts, or backups
 - `node_modules`

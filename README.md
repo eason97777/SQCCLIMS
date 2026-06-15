@@ -98,15 +98,24 @@ Boots the server against a throwaway temp data directory, exercises the key read
 | `JIQT_HOST` | bind host | `0.0.0.0` |
 | `PORT` | bind port | `8000` |
 | `JIQT_DATA_DIR` | runtime data directory | `SCRmonitor/data` |
-| `JIQT_AUTH_ENABLED` | turn token auth ON (truthy) | off |
-| `JIQT_AUTH_DISABLED` | hard-override that keeps auth OFF | off |
-| `JIQT_API_TOKENS` | `token:role,token:role` map (roles: admin/operator/viewer) | empty |
+| `JIQT_ARCHIVE_DIR` | append-only upload archive directory (may live on a separate/larger disk) | `<data-dir>/archive` |
+| `JIQT_AUTH_ENABLED` | turn token auth ON (truthy: `1`/`true`/`yes`) | off |
+| `JIQT_AUTH_DISABLED` | hard-override that keeps auth OFF even if enabled | off |
+| `JIQT_API_TOKENS` | token→role map, format `token:role,token:role` (roles: `viewer`/`operator`/`admin`) | empty |
+| `JIQT_ENABLE_MOCK` | enable the test-only `POST /api/parsed-data/mock` endpoint (404 otherwise) | off |
 
 Auth is **disabled by default**; see `docs/ARCHITECTURE.md` and `CONTRIBUTING.md` for details.
+
+> ⚠️ **Do not enable `JIQT_AUTH_ENABLED` yet.** The current frontend sends **no
+> token** and has **no login UI**, so turning auth on makes every `/api/` call
+> fail with **401** and the app stops working. Auth must stay **OFF** until a
+> token/login layer is built into the frontend.
 
 ## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layered architecture, request lifecycle, data model, infra.
+- [`docs/BACKEND_MODULES.md`](docs/BACKEND_MODULES.md) — per-module backend reference (responsibility, key functions, endpoints).
+- [`docs/Data_Flow.md`](docs/Data_Flow.md) — data flow + the authoritative deletion & data-safety policy.
 - [`docs/CODE_PRINCIPLES.md`](docs/CODE_PRINCIPLES.md) — conventions for humans and coding agents.
 - [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — plain-language definitions of domain and tech terms.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — dev workflow, adding endpoints, adding migrations.

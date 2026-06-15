@@ -1,110 +1,113 @@
 # Code Structure
 
-This document explains the main directories and source files in JIQT_2.
+This document explains the main directories and source files in SCRmonitor.
+
+> For the layered backend design and request lifecycle, see
+> [`docs/ARCHITECTURE.md`](ARCHITECTURE.md). For a per-module backend reference
+> (responsibility, key functions, endpoints), see
+> [`docs/BACKEND_MODULES.md`](BACKEND_MODULES.md). Environment variables are
+> documented in the repository [`README.md`](../README.md) (there is no
+> `.env.example`).
 
 ## Top-Level Layout
 
-- `.gitignore` defines source-control exclusions for secrets, dependency folders, runtime data, generated files, packaging outputs, and caches.
-- `.env.example` documents safe placeholder environment variables.
-- `README.md` gives the project overview and startup guidance.
-- `docs/` contains project-level explanation documents.
-- `SCRmonitor/` contains the active backend, frontend, parser, migration, template, tool, and packaging source.
+The application lives in a **nested** directory: the repo root is the outer
+`SCRmonitor/`; the app is the inner `SCRmonitor/SCRmonitor/`.
 
-The top-level `frontend/` directory is not part of the active application unless manually confirmed. It appears to be an old or empty scaffold.
+- `README.md` — project overview, startup, configuration (env vars).
+- `CONTRIBUTING.md` — dev workflow, how to add an endpoint / migration.
+- `docs/` — `ARCHITECTURE.md`, `BACKEND_MODULES.md`, `Data_Flow.md`,
+  `CODE_PRINCIPLES.md`, `GLOSSARY.md` (+ these legacy notes).
+- `.gitignore` — excludes secrets, dependency folders, runtime data, generated
+  files, packaging output, and caches.
+- `frontend/` (outer) — legacy/empty scaffold; **not** the active app.
+- `history/` — legacy snapshots; gitignored, never committed.
+- `SCRmonitor/` (inner) — the active application (see below).
 
-## Backend
+## Backend (`SCRmonitor/SCRmonitor/`)
 
-- `SCRmonitor/server.py` is the main backend entry point. It creates the HTTP server, defines API routing, manages SQLite connections, runs migrations, handles uploads, serves generated outputs, and serves frontend static files.
-- `SCRmonitor/requirements.txt` lists Python dependencies used for packaging and spreadsheet support.
-- `SCRmonitor/scripts/cleanup_dev_orphans.py` is a maintenance utility for cleaning orphaned development upload folders.
+The backend is a layered Python package (standard library only). Dependency
+direction is low-level ← features ← http.
+
+- `server.py` — thin entrypoint (~60 lines). Parses args/env, configures paths,
+  prepares directories, sets up logging, initializes the SQLite schema, runs
+  migrations, takes a startup backup, writes a `server.pid` file, and serves.
+- `app/` — the backend package:
+  - **Low-level / data:** `config.py` (runtime paths + constants),
+    `db.py` (`connect_db`, `record_deletion`, schema helpers),
+    `validation.py` (input coercion, safe-path helpers, `now_iso`),
+    `errors.py` (domain exceptions + exception→HTTP status map),
+    `storage.py` (filesystem path resolution + uploaded/generated file storage).
+  - **Infra:** `migrations.py` (`init_db` + forward-only `run_migrations`),
+    `logging_setup.py` (rotating file + stderr logging),
+    `backup.py` (startup SQLite snapshots with retention),
+    `archive.py` (append-only content-addressed upload archive),
+    `auth.py` (optional token auth + RBAC, off by default),
+    `deletion.py` (centralized file cleanup + cascade-preview helpers).
+  - **HTTP:** `http/handler.py` — `AppHandler`: parse, authorize, route
+    `/api/` to feature handlers (else serve the SPA), serialize JSON / stream
+    downloads, access logging. No business logic.
+  - **Features:** `features/*.py` — one module per domain area (samples,
+    test_data, process_records, mes, raw_data, parsing, visualization,
+    characterization, performance, processing, summary). Each owns its
+    HTTP-facing handlers and the SQL behind them.
+- `requirements.txt` — the one optional dependency (XLSX support).
+- `scripts/` — maintenance tools: `restore_db.py` (DB snapshot restore),
+  `restore_file.py` (archive file recovery), `cleanup_dev_orphans.py`.
+- `tests/smoke_test.py` — regression smoke test.
 
 Runtime database files are not source code and must not be committed.
 
 ## Frontend
 
-The active frontend is `SCRmonitor/frontend`.
+The active frontend is `SCRmonitor/SCRmonitor/frontend` (React + TypeScript +
+Vite). Important files:
 
-Important files:
+- `package.json` / `package-lock.json` — dependency graph.
+- `vite.config.ts` — Vite config; `tsconfig*.json` — TypeScript; `eslint.config.js` — linting.
+- `index.html` — Vite HTML entry; `public/` — static assets.
+- `src/main.tsx` — mounts React; `src/App.tsx` — app shell; `src/router/` — routing.
+- `src/pages/` — page views; `src/components/` — reusable UI by feature area.
+- `src/api/` — API client wrappers; `src/stores/` — state; `src/types/` — TS models; `src/utils/` — utilities.
 
-- `package.json` and `package-lock.json` define the frontend dependency graph.
-- `vite.config.ts` configures Vite.
-- `tsconfig.json`, `tsconfig.app.json`, and `tsconfig.node.json` configure TypeScript.
-- `eslint.config.js` configures linting.
-- `index.html` is the Vite HTML entry.
-- `public/` contains static assets copied by Vite.
-- `src/main.tsx` mounts the React application.
-- `src/App.tsx` defines the application shell.
-- `src/router/` defines frontend routing.
-- `src/pages/` contains page-level views.
-- `src/components/` contains reusable UI components grouped by feature area.
-- `src/api/` contains API client wrappers for backend endpoints.
-- `src/stores/` contains frontend state management modules.
-- `src/types/` contains TypeScript data model definitions.
-- `src/utils/` contains shared frontend utilities.
-- `src/assets/` contains source assets used by the frontend.
-
-Generated frontend output in `SCRmonitor/frontend/dist` must not be committed.
+Generated build output in `frontend/dist` must not be committed.
 
 ## Parsers And Data Processing
 
-`SCRmonitor/parsers/` contains backend-side parser and visualization modules:
+`SCRmonitor/SCRmonitor/parsers/` contains backend-side parser and visualizer
+modules, invoked by the `parsing` / `visualization` features:
 
-- `cd_template_parser.py` parses CD SEM template CSV files.
-- `resistance_csv_parser.py` parses resistance CSV files.
-- `cd_violin_visualizer.py` generates CD violin visualization outputs.
-- `resistance_heatmap_visualizer.py` generates resistance heatmap visualization outputs.
-- `__init__.py` marks the parser package.
-
-Python cache files under `__pycache__/` are generated and must not be committed.
+- `resistance_csv_parser.py` — parse resistance CSV/XLSX into die/area records.
+- `resistance_heatmap_visualizer.py` — generate resistance wafer heatmaps.
+- `cd_template_parser.py` — parse CD/SEM template CSV files.
+- `cd_violin_visualizer.py` — generate CD/SEM violin plots.
+- `__init__.py` — marks the parser package.
 
 ## Migrations
 
-`SCRmonitor/migrations/` contains SQLite migration files and rules:
-
-- `001_baseline_marker.sql`
-- `002_add_mes_flow_tables.sql`
-- `003_seed_jjtest_mes_route.sql`
-- `README.md`
-
-Migration files are source-controlled because they define reproducible database structure and seed behavior. Runtime database files are not source-controlled.
+`SCRmonitor/SCRmonitor/migrations/` contains forward-only, checksum-guarded
+SQLite migration files (`NNN_description.sql`) and a `README.md` with the rules.
+Migration files are source-controlled; runtime database files are not. See
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md) and `migrations/README.md`.
 
 ## Templates
 
-`SCRmonitor/templates/` contains source templates shipped with the application. These are not runtime uploads. Current template files should be committed when they are required for the app to work or for users to reproduce supported import formats.
+`SCRmonitor/SCRmonitor/templates/` holds downloadable import templates shipped
+with the app (e.g. `cd_sem_template.csv`). These are source templates, not
+runtime uploads.
 
-## Tools
+## Tools And Packaging
 
-`SCRmonitor/tools/` contains utility scripts, such as local-open helpers, that support project operation.
-
-## Packaging
-
-`SCRmonitor/packaging/` contains source scripts and installer configuration:
-
-- build scripts
-- install/uninstall scripts
-- service configuration
-- installer scripts
-- packaging documentation
-
-Generated package folders and binaries are not source:
-
-- `SCRmonitor/packaging/output/`
-- `SCRmonitor/packaging/staging/`
-- generated `.exe` or installer artifacts
+- `SCRmonitor/SCRmonitor/tools/` — utility scripts (e.g. local-open helpers).
+- `SCRmonitor/SCRmonitor/packaging/` — build/install scripts, service config,
+  installer scripts, packaging docs. Generated package output
+  (`packaging/output/`, `packaging/staging/`, installer binaries) is not source.
 
 ## Runtime-Only Directories
 
-These directories are runtime-only and should not be uploaded to Git:
+These are runtime-only and must not be committed (only `.gitkeep` placeholders):
 
-- `.local_run_data/`
-- `SCRmonitor/.local-data/`
-- `SCRmonitor/data/` contents except `.gitkeep`
-- upload folders
-- output folders
-- export/report/artifact folders
-- log folders
-- backup folders
-- frontend build output
-- dependency folders
-- Python cache folders
-
+- `SCRmonitor/SCRmonitor/data/` — `sample_testing.db`, `uploads/`, `outputs/`,
+  `logs/`, `backups/`, `archive/`.
+- frontend build output, dependency folders, Python cache folders, and any real
+  experimental or business data.
