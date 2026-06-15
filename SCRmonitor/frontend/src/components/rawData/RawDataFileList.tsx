@@ -6,7 +6,7 @@ import { formatFileSize } from "../../utils/fileSize";
 type RawDataFileListProps = {
   files?: RawDataFile[];
   onDownload: (fileId: number) => void;
-  onDelete: (fileId: number) => Promise<void> | void;
+  onDelete: (file: RawDataFile) => void;
 };
 
 function valueOrDash(value: string | number | null | undefined) {
@@ -40,17 +40,9 @@ export function RawDataFileList({ files = [], onDownload, onDelete }: RawDataFil
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, []);
 
-  async function handleDelete(file: RawDataFile) {
+  function handleDelete(file: RawDataFile) {
     setOpenMenuId(null);
-    const confirmed = window.confirm(
-      `确认删除源文件 ${file.original_filename} 吗？删除后将一并删除该 Raw Data 下的标准化结果、可视化图和处理历史，此操作不可恢复。`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    await onDelete(file.id);
+    onDelete(file);
   }
 
   if (files.length === 0) {
@@ -102,7 +94,7 @@ export function RawDataFileList({ files = [], onDownload, onDelete }: RawDataFil
                       <button
                         className="raw-file-delete-menu-item"
                         type="button"
-                        onClick={() => void handleDelete(file)}
+                        onClick={() => handleDelete(file)}
                       >
                         删除
                       </button>

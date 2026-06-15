@@ -1,6 +1,7 @@
 import { apiClient } from "./apiClient";
 import type {
   PerformanceDataset,
+  PerformanceDatasetDeletePreview,
   PerformanceDatasetFields,
   PerformanceDatasetFile,
   PerformanceDatasetListParams,
@@ -48,4 +49,10 @@ export function uploadPerformanceDataset(
 
 export function deletePerformanceDataset(datasetId: string | number) {
   return apiClient.delete<DeleteResponse>(`/api/performance-datasets/${datasetId}`);
+}
+
+export function getPerformanceDatasetDeletePreview(datasetId: string | number) {
+  return apiClient.get<PerformanceDatasetDeletePreview>(
+    `/api/performance-datasets/${datasetId}/delete-preview`,
+  );
 }

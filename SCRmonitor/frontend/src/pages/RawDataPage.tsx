@@ -3,6 +3,7 @@ import {
   getParsedData,
   getProcessingJobs,
   getRawDataDeletePreview,
+  getRawDataFileDeletePreview,
 } from "../api/rawDataApi";
 import { getSamples } from "../api/samplesApi";
 import { RawDataDetailPanel } from "../components/rawData/RawDataDetailPanel";
@@ -19,6 +20,8 @@ import type {
   ParsedDataRecord,
   ProcessingJobRecord,
   RawDataDeletePreview,
+  RawDataFile,
+  RawDataFileDeletePreview,
   RawDataPayload,
   RawDataRecord,
   VisualizationPayload,
@@ -234,6 +237,13 @@ export function RawDataPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [pendingFileDelete, setPendingFileDelete] = useState<
+    { file: RawDataFile; rawDataId: number } | null
+  >(null);
+  const [filePreview, setFilePreview] = useState<RawDataFileDeletePreview | null>(null);
+  const [filePreviewLoading, setFilePreviewLoading] = useState(false);
+  const [filePreviewError, setFilePreviewError] = useState("");
+  const [fileDeleting, setFileDeleting] = useState(false);
 
   const pageError = useMemo(
     () => localError || error || samplesError,
@@ -362,16 +372,55 @@ export function RawDataPage() {
     }
   }
 
-  async function handleDeleteRawDataFile(fileId: number, rawDataId: number) {
-    setLocalError("");
+  function requestFileDelete(file: RawDataFile, rawDataId: number) {
+    setPendingFileDelete({ file, rawDataId });
+    setFilePreview(null);
+    setFilePreviewError("");
+    setFilePreviewLoading(true);
+    getRawDataFileDeletePreview(file.id)
+      .then((result) => setFilePreview(result))
+      .catch((err) =>
+        setFilePreviewError(err instanceof Error ? err.message : "获取删除影响范围失败"),
+      )
+      .finally(() => setFilePreviewLoading(false));
+  }
 
+  function cancelFileDelete() {
+    setPendingFileDelete(null);
+    setFilePreview(null);
+    setFilePreviewError("");
+    setFilePreviewLoading(false);
+  }
+
+  async function confirmFileDelete() {
+    if (!pendingFileDelete) {
+      return;
+    }
+    const { file, rawDataId } = pendingFileDelete;
+    setLocalError("");
+    setFileDeleting(true);
     try {
-      await deleteRawDataFile(fileId, rawDataId);
+      await deleteRawDataFile(file.id, rawDataId);
       await refreshRawDataResults(rawDataId);
+      cancelFileDelete();
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "删除 Raw Data 源文件失败");
+    } finally {
+      setFileDeleting(false);
     }
   }
+
+  const fileDeletePreviewLines = useMemo<DeletePreviewLine[]>(() => {
+    if (!filePreview) {
+      return [];
+    }
+    const candidates: DeletePreviewLine[] = [
+      { label: "条解析数据", count: filePreview.parsed_data },
+      { label: "条解析记录", count: filePreview.parsed_records },
+      { label: "个关联文件", count: filePreview.files_total },
+    ];
+    return candidates.filter((line) => line.count > 0);
+  }, [filePreview]);
 
   function requestDelete(record: RawDataRecord) {
     setPendingDelete(record);
@@ -526,7 +575,7 @@ export function RawDataPage() {
             parsing={parsing}
             onUpload={(rawDataId, files) => void handleUpload(rawDataId, files)}
             onDownloadFile={downloadRawDataFile}
-            onDeleteFile={(fileId, rawDataId) => void handleDeleteRawDataFile(fileId, rawDataId)}
+            onDeleteFile={(file, rawDataId) => requestFileDelete(file, rawDataId)}
             onParse={(rawDataId) => void handleParse(rawDataId)}
             onVisualize={(parsedDataId, payload) => void handleVisualize(parsedDataId, payload)}
             onSelectParsedData={setSelectedParsedData}
@@ -559,6 +608,18 @@ export function RawDataPage() {
         deleting={deleting}
         onConfirm={() => void confirmDelete()}
         onCancel={cancelDelete}
+      />
+
+      <DeleteConfirmDialog
+        open={pendingFileDelete !== null}
+        title="删除源文件"
+        message={`确认删除源文件 ${pendingFileDelete?.file.original_filename ?? ""}？此操作不可撤销。`}
+        previewLines={fileDeletePreviewLines}
+        loading={filePreviewLoading}
+        error={filePreviewError}
+        deleting={fileDeleting}
+        onConfirm={() => void confirmFileDelete()}
+        onCancel={cancelFileDelete}
       />
     </section>
   );

@@ -36,7 +36,23 @@ def main():
     logger.info("starting server host=%s port=%s db=%s", args.host, args.port, config.DB_PATH)
     print(f"Serving sample testing center at http://{args.host}:{args.port}")
     print(f"SQLite database: {config.DB_PATH}")
-    server.serve_forever()
+
+    # Write a pidfile so restore tooling can reliably detect a running server.
+    # It is removed on clean shutdown; a lingering pidfile after a crash is
+    # acceptable (restore_db.py verifies the PID is actually alive).
+    pidfile = config.DATA_DIR / "server.pid"
+    try:
+        pidfile.write_text(str(os.getpid()), encoding="utf-8")
+    except OSError as exc:
+        logger.warning("could not write pidfile %s: %s", pidfile, exc)
+
+    try:
+        server.serve_forever()
+    finally:
+        try:
+            pidfile.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

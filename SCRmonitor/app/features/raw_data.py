@@ -11,6 +11,7 @@ from app.archive import archive_file
 from app.backup import backup_database
 from app.errors import ConflictError
 from app.db import connect_db, record_deletion
+from app.deletion import collect_job_output_paths, remove_files
 from app.features.characterization import preview_type_for_file
 from app.features.samples import build_sample_display_code, generate_sample_uid, get_sample_row
 from app.storage import ensure_upload_root, file_sha256, raw_data_upload_file_path, resolve_data_path, storage_path_for
@@ -299,6 +300,13 @@ def delete_raw_data(raw_data_id):
             "SELECT file_path FROM raw_data_files WHERE raw_data_id = ?",
             (raw_data_id,),
         ).fetchall()
+        # Collect visualization output files before deleting the job rows, so
+        # generated charts/reports are not orphaned on disk.
+        job_rows = conn.execute(
+            "SELECT id, output_json FROM processing_jobs WHERE raw_data_id = ?",
+            (raw_data_id,),
+        ).fetchall()
+        job_output_paths = collect_job_output_paths(job_rows)
         raw_data_full = conn.execute("SELECT * FROM raw_data WHERE id = ?", (raw_data_id,)).fetchone()
         record_deletion(conn, "raw_data", raw_data_full)
         conn.execute("DELETE FROM processing_jobs WHERE raw_data_id = ?", (raw_data_id,))
@@ -315,9 +323,15 @@ def delete_raw_data(raw_data_id):
     storage_dir = resolve_data_path(raw_data["storage_path"]) if raw_data["storage_path"] else None
     if storage_dir and str(storage_dir).startswith(str(raw_root)) and storage_dir.exists():
         shutil.rmtree(storage_dir, ignore_errors=True)
+    # Remove visualization output files via the centralized helper (guarded by
+    # root confinement to the upload/output dirs).
+    remove_files(job_output_paths)
     return {"deleted": raw_data_id}
 
 def delete_raw_data_file(file_id):
+    # Strong-tier delete (cascades parsed_data/parsed_records/processing_jobs +
+    # removes files): snapshot the DB before opening the delete transaction.
+    backup_database()
     timestamp = now_iso()
     with connect_db() as conn:
         file_record = raw_data_file_row(conn, file_id)

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type {
   ParsedDataRecord,
   ProcessingJobRecord,
+  RawDataFile,
   RawDataRecord,
   VisualizationPayload,
 } from "../../types/rawData";
@@ -22,7 +23,7 @@ type RawDataDetailPanelProps = {
   parsing?: boolean;
   onUpload: (rawDataId: number, files: File[]) => Promise<void> | void;
   onDownloadFile: (fileId: number) => void;
-  onDeleteFile: (fileId: number, rawDataId: number) => Promise<void> | void;
+  onDeleteFile: (file: RawDataFile, rawDataId: number) => void;
   onParse: (rawDataId: number) => Promise<void> | void;
   onVisualize: (parsedDataId: number, payload?: VisualizationPayload) => Promise<void> | void;
   onSelectParsedData: (parsedData: ParsedDataRecord) => void;
@@ -146,7 +147,7 @@ export function RawDataDetailPanel({
             <RawDataFileList
               files={rawData.files}
               onDownload={onDownloadFile}
-              onDelete={(fileId) => onDeleteFile(fileId, rawData.id)}
+              onDelete={(file) => onDeleteFile(file, rawData.id)}
             />
           </section>
         ) : null}

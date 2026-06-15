@@ -3,7 +3,7 @@ from datetime import datetime
 
 from app.backup import backup_database
 from app.db import connect_db, record_deletion
-from app.deletion import collect_sample_file_paths, remove_files
+from app.deletion import collect_sample_file_paths, collect_sample_job_output_paths, remove_files
 from app.validation import has_garbled_text, has_only_punctuation, normalize_sample_text, now_iso, optional_text, require_text, row_dict, rows_dict
 
 
@@ -232,13 +232,18 @@ def delete_sample(sample_id):
         if row is None:
             raise LookupError("sample not found")
         # Collect file paths BEFORE the row delete (the cascade would otherwise
-        # remove the rows that point at them).
+        # remove the rows that point at them). processing_jobs.sample_id is
+        # ON DELETE SET NULL, so its output files (and rows) would otherwise be
+        # orphaned: collect those outputs and explicitly delete the rows here.
         file_paths = collect_sample_file_paths(conn, sample_id)
+        job_output_paths = collect_sample_job_output_paths(conn, sample_id)
         record_deletion(conn, "samples", row)
+        conn.execute("DELETE FROM processing_jobs WHERE sample_id = ?", (sample_id,))
         cursor = conn.execute("DELETE FROM samples WHERE id = ?", (sample_id,))
         if cursor.rowcount == 0:
             raise LookupError("sample not found")
     # Remove live-store files only after the row delete commits; the archive
     # still holds immutable copies.
     remove_files(file_paths)
+    remove_files(job_output_paths)
     return {"deleted": sample_id}

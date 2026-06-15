@@ -1,6 +1,7 @@
 import cgi
 import json
 import mimetypes
+import os
 import shutil
 import time
 from http.server import BaseHTTPRequestHandler
@@ -23,7 +24,7 @@ from app.features.processing import get_processing_results, run_processing
 from app.features.raw_data import create_raw_data, delete_raw_data, delete_raw_data_file, get_raw_data_detail, get_raw_data_list, raw_data_file_row, upload_raw_data_files
 from app.features.samples import create_sample, delete_sample, get_samples, update_sample
 from app.features.summary import get_summary
-from app.deletion import raw_data_delete_preview, sample_delete_preview
+from app.deletion import performance_dataset_delete_preview, raw_data_delete_preview, raw_data_file_delete_preview, sample_delete_preview
 from app.features.test_data import bulk_create_test_data, create_test_data, delete_test_data, get_test_data
 from app.features.visualization import get_processing_jobs, get_resistance_summary, get_visualization_chart_archive, visualize_parsed_data
 from app.storage import raw_data_upload_file_path, resolve_data_path
@@ -241,6 +242,9 @@ class AppHandler(BaseHTTPRequestHandler):
             if method == "GET" and suffix.endswith("/download"):
                 file_id = int(suffix.replace("/download", "").strip("/"))
                 return self.send_raw_data_file(file_id)
+            if method == "GET" and suffix.endswith("/delete-preview"):
+                file_id = int(suffix.replace("/delete-preview", "").strip("/"))
+                return self.send_json(raw_data_file_delete_preview(file_id))
             if method == "DELETE":
                 file_id = self.path_id(path, "/api/raw-data-files/")
                 return self.send_json(delete_raw_data_file(file_id))
@@ -252,6 +256,10 @@ class AppHandler(BaseHTTPRequestHandler):
         if method == "GET" and path == "/api/parsed-data":
             return self.send_json(get_parsed_data_list(query))
         if method == "POST" and path == "/api/parsed-data/mock":
+            # Test-only fixture endpoint: writes real DB rows from arbitrary
+            # client JSON. Disabled in production; enable with JIQT_ENABLE_MOCK.
+            if os.environ.get("JIQT_ENABLE_MOCK", "").strip().lower() not in {"1", "true", "yes", "on"}:
+                raise LookupError("not found")
             return self.send_json(create_mock_parsed_data(self.read_json()), status=201)
         if path.startswith("/api/parsed-data/") and method == "POST" and path.endswith("/visualize"):
             parsed_data_id = self.path_id(path[:-len("/visualize")], "/api/parsed-data/")
@@ -311,6 +319,9 @@ class AppHandler(BaseHTTPRequestHandler):
             if method == "GET" and suffix.endswith("/files"):
                 dataset_id = int(suffix.replace("/files", "").strip("/"))
                 return self.send_json(get_performance_dataset_files(dataset_id))
+            if method == "GET" and suffix.endswith("/delete-preview"):
+                dataset_id = int(suffix.replace("/delete-preview", "").strip("/"))
+                return self.send_json(performance_dataset_delete_preview(dataset_id))
             if method == "DELETE":
                 dataset_id = self.path_id(path, "/api/performance-datasets/")
                 return self.send_json(delete_performance_dataset(dataset_id))

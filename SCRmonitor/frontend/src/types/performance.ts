@@ -20,6 +20,11 @@ export type PerformanceDataset = {
   sample_name: string;
 };
 
+export type PerformanceDatasetDeletePreview = {
+  dataset_name: string;
+  files: number;
+};
+
 export type PerformanceDatasetFile = {
   id: number;
   dataset_id: number;

@@ -14,6 +14,7 @@ import type {
   VisualizationPayload,
   DeleteRawDataFileResponse,
   RawDataDeletePreview,
+  RawDataFileDeletePreview,
 } from "../types/rawData";
 import type { DeleteResponse } from "../types/sample";
 
@@ -61,6 +62,12 @@ export function rawDataFileDownloadUrl(fileId: string | number) {
 
 export function deleteRawDataFile(fileId: string | number) {
   return apiClient.delete<DeleteRawDataFileResponse>(`/api/raw-data-files/${fileId}`);
+}
+
+export function getRawDataFileDeletePreview(fileId: string | number) {
+  return apiClient.get<RawDataFileDeletePreview>(
+    `/api/raw-data-files/${fileId}/delete-preview`,
+  );
 }
 
 export function getParsedData(params: RawDataListParams = {}) {

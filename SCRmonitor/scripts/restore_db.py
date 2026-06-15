@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sqlite3
 import sys
@@ -59,6 +60,40 @@ def print_backups(backups):
     print(f"{'#':>2}  {'file':40}  {'size':>8}")
     for i, b in enumerate(backups):
         print(f"{i:>2}  {b.name:40}  {human_size(b.stat().st_size):>8}")
+
+
+def running_server_pid(data_dir: Path):
+    """Return the PID of a live server via the pidfile, else None.
+
+    The server writes ``<data-dir>/server.pid`` on startup and removes it on
+    clean shutdown. A stale pidfile (e.g. after a crash) is ignored because we
+    verify the process is actually alive with ``os.kill(pid, 0)``.
+    """
+    pidfile = data_dir / "server.pid"
+    if not pidfile.exists():
+        return None
+    try:
+        pid = int(pidfile.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+    if pid <= 0:
+        return None
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return None  # stale pidfile, process is gone
+    except PermissionError:
+        return pid  # process exists but owned by another user
+    except OSError:
+        return None
+    return pid
+
+
+def has_wal_sidecars(db_path: Path) -> bool:
+    """Secondary heuristic: WAL sidecars present suggests the DB is/was open."""
+    return any(
+        Path(str(db_path) + suffix).exists() for suffix in ("-wal", "-shm")
+    )
 
 
 def db_is_locked(db_path: Path) -> bool:
@@ -118,7 +153,28 @@ def main() -> int:
             print(f"Backup not found: {chosen}", file=sys.stderr)
             return 1
 
-    # Safety: refuse if the DB looks in use.
+    # Safety check 1 (primary): a live server detected via the pidfile.
+    pid = running_server_pid(config.DATA_DIR)
+    if pid is not None:
+        print(
+            f"A server appears to be running (pid {pid}, per "
+            f"{config.DATA_DIR / 'server.pid'}).\n"
+            "Stop the server before restoring, or remove the pidfile if it is "
+            "stale (the process is confirmed alive).",
+            file=sys.stderr,
+        )
+        return 2
+
+    # Safety check 2 (secondary warning): WAL sidecars suggest the DB is open.
+    if has_wal_sidecars(db_path):
+        print(
+            f"WARNING: WAL sidecar files exist next to {db_path}; the database "
+            "may be open. Ensure the server is stopped before continuing.",
+            file=sys.stderr,
+        )
+
+    # Safety check 3 (tertiary): best-effort exclusive-lock probe. Under WAL an
+    # idle server may not hold a lock, so this is a guard, not a guarantee.
     if db_is_locked(db_path):
         print(
             f"The database at {db_path} appears to be in use.\n"
@@ -136,7 +192,9 @@ def main() -> int:
             print("Aborted.")
             return 0
 
-    # Snapshot the current live DB first, so the restore is reversible.
+    # Always protect before overwrite: if a non-empty live DB exists, the
+    # pre_restore snapshot MUST succeed or we abort. A missing/empty live DB
+    # has nothing to protect, so we proceed.
     if db_path.exists() and db_path.stat().st_size > 0:
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safety = backups_dir / f"pre_restore_{stamp}.db"
@@ -151,9 +209,23 @@ def main() -> int:
                     dst.close()
             finally:
                 src.close()
-            print(f"Current database saved to: {safety}")
         except Exception as exc:  # noqa: BLE001
-            print(f"WARNING: could not snapshot current db ({exc}); continuing.", file=sys.stderr)
+            print(
+                f"ABORTING: could not snapshot the current database ({exc}).\n"
+                "Refusing to overwrite a non-empty live database without a "
+                "safety copy.",
+                file=sys.stderr,
+            )
+            return 3
+        # Verify the snapshot actually landed and is non-empty.
+        if not safety.exists() or safety.stat().st_size == 0:
+            print(
+                "ABORTING: pre_restore snapshot is missing or empty; refusing "
+                "to overwrite the live database without a safety copy.",
+                file=sys.stderr,
+            )
+            return 3
+        print(f"Current database saved to: {safety}")
 
     # Swap the backup in and clear stale WAL sidecars.
     shutil.copy2(chosen, db_path)

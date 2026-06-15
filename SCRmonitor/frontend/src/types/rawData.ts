@@ -60,6 +60,13 @@ export type RawDataDeletePreview = {
   files_total: number;
 };
 
+export type RawDataFileDeletePreview = {
+  original_filename: string;
+  parsed_data: number;
+  parsed_records: number;
+  files_total: number;
+};
+
 export type DeleteRawDataFileResponse = {
   deleted_file_id: number;
   raw_data_id: number;

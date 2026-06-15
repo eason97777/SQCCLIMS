@@ -12,7 +12,7 @@ report a delete's blast radius without deleting anything.
 Paths are read from ``app.config`` at call time.
 """
 import app.config as config
-from app.storage import resolve_data_path
+from app.storage import output_paths_from_job_output, resolve_data_path
 
 
 def _live_store_roots():
@@ -77,6 +77,33 @@ def collect_sample_file_paths(conn, sample_id):
             continue
         paths.append(resolve_data_path(value))
     return paths
+
+
+def collect_job_output_paths(job_rows):
+    """Return resolved live-store paths for the visualization outputs referenced
+    by the given ``processing_jobs`` rows (each must expose ``output_json``).
+    Mirrors the extraction used by ``delete_output_files_for_jobs`` so sample /
+    raw-data deletes don't orphan generated chart/report files."""
+    paths = []
+    seen = set()
+    for job in job_rows:
+        for raw_path in output_paths_from_job_output(job["output_json"]):
+            target = resolve_data_path(raw_path)
+            if target in seen:
+                continue
+            seen.add(target)
+            paths.append(target)
+    return paths
+
+
+def collect_sample_job_output_paths(conn, sample_id):
+    """Return resolved live-store paths for visualization outputs owned by the
+    sample's ``processing_jobs`` rows."""
+    job_rows = conn.execute(
+        "SELECT output_json FROM processing_jobs WHERE sample_id = ?",
+        (sample_id,),
+    ).fetchall()
+    return collect_job_output_paths(job_rows)
 
 
 def remove_files(paths):
@@ -184,6 +211,72 @@ def raw_data_delete_preview(raw_data_id):
         return {
             "raw_data_code": raw_data["raw_data_code"],
             "raw_data_files": len(file_rows),
+            "parsed_data": _count(
+                conn, "SELECT COUNT(*) AS count FROM parsed_data WHERE raw_data_id = ?", (raw_data_id,)
+            ),
+            "parsed_records": _count(
+                conn, "SELECT COUNT(*) AS count FROM parsed_records WHERE raw_data_id = ?", (raw_data_id,)
+            ),
+            "files_total": files_total,
+        }
+
+
+def performance_dataset_delete_preview(dataset_id):
+    """Read-only cascade preview for a performance dataset delete. Does not
+    delete anything. ``files`` is the number of dataset files that will be
+    removed."""
+    from app.db import connect_db
+
+    with connect_db() as conn:
+        dataset = conn.execute(
+            "SELECT id, dataset_name FROM performance_datasets WHERE id = ?",
+            (dataset_id,),
+        ).fetchone()
+        if dataset is None:
+            raise LookupError("performance dataset not found")
+
+        files = _count(
+            conn,
+            "SELECT COUNT(*) AS count FROM performance_dataset_files WHERE dataset_id = ?",
+            (dataset_id,),
+        )
+        return {
+            "dataset_name": dataset["dataset_name"],
+            "files": files,
+        }
+
+
+def raw_data_file_delete_preview(file_id):
+    """Read-only cascade preview for a single raw-data-file delete. Does not
+    delete anything. Reports what ``delete_raw_data_file`` would cascade-remove
+    for the file's parent raw_data (parsed_data, parsed_records, and files on
+    disk: the source file plus the parent's visualization outputs)."""
+    from app.db import connect_db
+
+    with connect_db() as conn:
+        file_record = conn.execute(
+            "SELECT id, raw_data_id, original_filename, file_path FROM raw_data_files WHERE id = ?",
+            (file_id,),
+        ).fetchone()
+        if file_record is None:
+            raise LookupError("raw data file not found")
+        raw_data_id = file_record["raw_data_id"]
+
+        paths = []
+        if file_record["file_path"]:
+            paths.append(resolve_data_path(file_record["file_path"]))
+
+        job_rows = conn.execute(
+            "SELECT output_json FROM processing_jobs WHERE raw_data_id = ?",
+            (raw_data_id,),
+        ).fetchall()
+        paths.extend(collect_job_output_paths(job_rows))
+
+        files_total = sum(
+            1 for p in paths if _is_under_live_store(p) and p.is_file()
+        )
+        return {
+            "original_filename": file_record["original_filename"],
             "parsed_data": _count(
                 conn, "SELECT COUNT(*) AS count FROM parsed_data WHERE raw_data_id = ?", (raw_data_id,)
             ),

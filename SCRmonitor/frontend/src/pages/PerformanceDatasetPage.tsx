@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
+import { getPerformanceDatasetDeletePreview } from "../api/performanceApi";
 import { getSamples } from "../api/samplesApi";
+import {
+  DeleteConfirmDialog,
+  type DeletePreviewLine,
+} from "../components/common/DeleteConfirmDialog";
 import { DatasetFileTree } from "../components/performance/DatasetFileTree";
 import { DatasetImportPanel } from "../components/performance/DatasetImportPanel";
 import { DatasetSummaryCard } from "../components/performance/DatasetSummaryCard";
 import { PerformanceDatasetFilter } from "../components/performance/PerformanceDatasetFilter";
 import { PerformanceDatasetTable } from "../components/performance/PerformanceDatasetTable";
 import { usePerformanceStore } from "../stores/performanceStore";
-import type { PerformanceDataset, PerformanceDatasetFields } from "../types/performance";
+import type {
+  PerformanceDataset,
+  PerformanceDatasetDeletePreview,
+  PerformanceDatasetFields,
+} from "../types/performance";
 import type { Sample } from "../types/sample";
 
 type DirectoryFile = File & {
@@ -33,6 +42,11 @@ export function PerformanceDatasetPage() {
   const [samplesLoading, setSamplesLoading] = useState(true);
   const [samplesError, setSamplesError] = useState("");
   const [localError, setLocalError] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<PerformanceDataset | null>(null);
+  const [preview, setPreview] = useState<PerformanceDatasetDeletePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const pageError = useMemo(
     () => localError || error || samplesError,
@@ -90,20 +104,52 @@ export function PerformanceDatasetPage() {
     }
   }
 
-  async function handleDelete(dataset: PerformanceDataset) {
-    const confirmed = window.confirm("确认删除这个性能数据集及其文件？");
-    if (!confirmed) {
+  function requestDelete(dataset: PerformanceDataset) {
+    setPendingDelete(dataset);
+    setPreview(null);
+    setPreviewError("");
+    setPreviewLoading(true);
+    getPerformanceDatasetDeletePreview(dataset.id)
+      .then((result) => setPreview(result))
+      .catch((err) =>
+        setPreviewError(err instanceof Error ? err.message : "获取删除影响范围失败"),
+      )
+      .finally(() => setPreviewLoading(false));
+  }
+
+  function cancelDelete() {
+    setPendingDelete(null);
+    setPreview(null);
+    setPreviewError("");
+    setPreviewLoading(false);
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) {
       return;
     }
-
+    const dataset = pendingDelete;
     setLocalError("");
-
+    setDeleting(true);
     try {
       await deletePerformanceDataset(dataset.id);
+      cancelDelete();
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "删除性能数据集失败");
+    } finally {
+      setDeleting(false);
     }
   }
+
+  const deletePreviewLines = useMemo<DeletePreviewLine[]>(() => {
+    if (!preview) {
+      return [];
+    }
+    const candidates: DeletePreviewLine[] = [
+      { label: "个数据集文件", count: preview.files },
+    ];
+    return candidates.filter((line) => line.count > 0);
+  }, [preview]);
 
   return (
     <section>
@@ -166,7 +212,7 @@ export function PerformanceDatasetPage() {
           <PerformanceDatasetTable
             datasets={datasets}
             onViewFiles={(dataset) => void handleViewFiles(dataset)}
-            onDelete={(dataset) => void handleDelete(dataset)}
+            onDelete={(dataset) => requestDelete(dataset)}
           />
         )}
       </section>
@@ -188,6 +234,18 @@ export function PerformanceDatasetPage() {
           </div>
         </section>
       </div>
+
+      <DeleteConfirmDialog
+        open={pendingDelete !== null}
+        title="删除性能数据集"
+        message={`确认删除性能数据集 ${pendingDelete?.dataset_name ?? ""}？此操作不可撤销。`}
+        previewLines={deletePreviewLines}
+        loading={previewLoading}
+        error={previewError}
+        deleting={deleting}
+        onConfirm={() => void confirmDelete()}
+        onCancel={cancelDelete}
+      />
     </section>
   );
 }
