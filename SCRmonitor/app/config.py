@@ -23,6 +23,8 @@ OUTPUT_DIR = DATA_DIR / "outputs"
 
 LOG_DIR = DATA_DIR / "logs"
 
+ARCHIVE_DIR = Path(os.environ.get("JIQT_ARCHIVE_DIR", DATA_DIR / "archive")).expanduser().resolve()
+
 TEMPLATE_DIR = ROOT / "templates"
 
 MIGRATIONS_DIR = ROOT / "migrations"
@@ -108,10 +110,11 @@ PARSED_RECORD_MAPPED_KEYS = {
 }
 
 def configure_paths(data_dir=None):
-    global DATA_DIR, DB_PATH, UPLOAD_DIR, OUTPUT_DIR, LOG_DIR
+    global DATA_DIR, DB_PATH, UPLOAD_DIR, OUTPUT_DIR, LOG_DIR, ARCHIVE_DIR
     if data_dir:
         DATA_DIR = Path(data_dir).expanduser().resolve()
     DB_PATH = DATA_DIR / "sample_testing.db"
     UPLOAD_DIR = DATA_DIR / "uploads"
     OUTPUT_DIR = DATA_DIR / "outputs"
     LOG_DIR = DATA_DIR / "logs"
+    ARCHIVE_DIR = Path(os.environ.get("JIQT_ARCHIVE_DIR", DATA_DIR / "archive")).expanduser().resolve()

@@ -1,9 +1,10 @@
 import uuid
 
 import app.config as config
+from app.archive import archive_file
 from app.db import connect_db, record_deletion
 from app.features.samples import get_sample_row
-from app.storage import remove_stored_path, save_uploaded_file, storage_path_for
+from app.storage import remove_stored_path, resolve_data_path, save_uploaded_file, storage_path_for
 from app.validation import now_iso, optional_text, require_text, row_dict, rows_dict, safe_path_part
 
 
@@ -110,6 +111,11 @@ def create_performance_dataset(fields, files):
         for file_item in files:
             relative_name = file_item.get("filename") or "upload.bin"
             stored = save_uploaded_file(file_item, target_dir, relative_name=relative_name)
+            archive_file(
+                resolve_data_path(stored["storage_path"]),
+                original_filename=stored.get("original_filename"),
+                source="performance",
+            )
             file_payload = {
                 "dataset_id": dataset_id,
                 "relative_path": stored["relative_path"],

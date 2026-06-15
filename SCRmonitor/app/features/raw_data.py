@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 import app.config as config
+from app.archive import archive_file
 from app.errors import ConflictError
 from app.db import connect_db, record_deletion
 from app.features.characterization import preview_type_for_file
@@ -241,6 +242,12 @@ def upload_raw_data_files(raw_data_id, files):
 
         for file_item in files:
             stored = save_raw_data_file(file_item, target_dir, raw_data["raw_data_code"])
+            archive_file(
+                resolve_data_path(stored["file_path"]),
+                sha256=stored.get("sha256"),
+                original_filename=stored.get("original_filename"),
+                source="raw_data",
+            )
             payload = {
                 "raw_data_id": raw_data_id,
                 "created_at": timestamp,

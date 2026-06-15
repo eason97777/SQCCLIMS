@@ -2,6 +2,7 @@ import mimetypes
 from pathlib import Path
 
 import app.config as config
+from app.archive import archive_file
 from app.db import connect_db, record_deletion
 from app.features.samples import get_sample_row
 from app.storage import remove_stored_path, resolve_data_path, save_uploaded_file, storage_path_for
@@ -277,6 +278,11 @@ def create_characterization_files(fields, files):
 
         for file_item in files:
             stored = save_uploaded_file(file_item, target_dir)
+            archive_file(
+                resolve_data_path(stored["storage_path"]),
+                original_filename=stored.get("original_filename"),
+                source="characterization",
+            )
             payload = {
                 "collection_id": collection["id"],
                 "sample_id": sample_id,
