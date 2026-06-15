@@ -8,6 +8,7 @@ from pathlib import Path
 
 import app.config as config
 from app.archive import archive_file
+from app.backup import backup_database
 from app.errors import ConflictError
 from app.db import connect_db, record_deletion
 from app.features.characterization import preview_type_for_file
@@ -288,6 +289,8 @@ def upload_raw_data_files(raw_data_id, files):
         return raw_data_row_with_files(conn, raw_data_id)
 
 def delete_raw_data(raw_data_id):
+    # Strong-tier delete: snapshot the DB before opening the delete transaction.
+    backup_database()
     with connect_db() as conn:
         raw_data = conn.execute("SELECT storage_path FROM raw_data WHERE id = ?", (raw_data_id,)).fetchone()
         if raw_data is None:

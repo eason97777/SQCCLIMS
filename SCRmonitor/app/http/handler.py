@@ -23,6 +23,7 @@ from app.features.processing import get_processing_results, run_processing
 from app.features.raw_data import create_raw_data, delete_raw_data, delete_raw_data_file, get_raw_data_detail, get_raw_data_list, raw_data_file_row, upload_raw_data_files
 from app.features.samples import create_sample, delete_sample, get_samples, update_sample
 from app.features.summary import get_summary
+from app.deletion import raw_data_delete_preview, sample_delete_preview
 from app.features.test_data import bulk_create_test_data, create_test_data, delete_test_data, get_test_data
 from app.features.visualization import get_processing_jobs, get_resistance_summary, get_visualization_chart_archive, visualize_parsed_data
 from app.storage import raw_data_upload_file_path, resolve_data_path
@@ -170,6 +171,9 @@ class AppHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/samples/") and path.endswith("/characterization-tree") and method == "GET":
             sample_id = int(path.replace("/api/samples/", "", 1).replace("/characterization-tree", "").strip("/"))
             return self.send_json(get_characterization_tree(sample_id, query))
+        if path.startswith("/api/samples/") and path.endswith("/delete-preview") and method == "GET":
+            sample_id = int(path.replace("/api/samples/", "", 1).replace("/delete-preview", "").strip("/"))
+            return self.send_json(sample_delete_preview(sample_id))
         if path.startswith("/api/samples/"):
             sample_id = self.path_id(path, "/api/samples/")
             if method == "PUT":
@@ -225,6 +229,8 @@ class AppHandler(BaseHTTPRequestHandler):
                 return self.send_json(upload_raw_data_files(raw_data_id, files), status=201)
             if method == "POST" and len(parts) == 2 and parts[1] == "parse":
                 return self.send_json(parse_raw_data(raw_data_id, self.read_json()))
+            if method == "GET" and len(parts) == 2 and parts[1] == "delete-preview":
+                return self.send_json(raw_data_delete_preview(raw_data_id))
             if method == "GET" and len(parts) == 1:
                 return self.send_json(get_raw_data_detail(raw_data_id))
             if method == "DELETE" and len(parts) == 1:

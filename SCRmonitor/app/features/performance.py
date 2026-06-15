@@ -2,6 +2,7 @@ import uuid
 
 import app.config as config
 from app.archive import archive_file
+from app.backup import backup_database
 from app.db import connect_db, record_deletion
 from app.features.samples import get_sample_row
 from app.storage import remove_stored_path, resolve_data_path, save_uploaded_file, storage_path_for
@@ -163,6 +164,8 @@ def create_performance_dataset(fields, files):
         )
 
 def delete_performance_dataset(dataset_id):
+    # Strong-tier delete: snapshot the DB before opening the delete transaction.
+    backup_database()
     with connect_db() as conn:
         row = conn.execute("SELECT * FROM performance_datasets WHERE id = ?", (dataset_id,)).fetchone()
         if row is None:

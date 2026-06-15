@@ -320,7 +320,7 @@ def init_db():
                 location TEXT,
                 extra_json TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(parsed_data_id) REFERENCES parsed_data(id)
+                FOREIGN KEY(parsed_data_id) REFERENCES parsed_data(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS processing_jobs (

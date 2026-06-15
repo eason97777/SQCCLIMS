@@ -1,7 +1,9 @@
 import sqlite3
 from datetime import datetime
 
+from app.backup import backup_database
 from app.db import connect_db, record_deletion
+from app.deletion import collect_sample_file_paths, remove_files
 from app.validation import has_garbled_text, has_only_punctuation, normalize_sample_text, now_iso, optional_text, require_text, row_dict, rows_dict
 
 
@@ -223,12 +225,20 @@ def update_sample(sample_id, payload):
         return row_dict(conn.execute("SELECT * FROM samples WHERE id = ?", (sample_id,)).fetchone())
 
 def delete_sample(sample_id):
+    # Strong-tier delete: snapshot the DB before opening the delete transaction.
+    backup_database()
     with connect_db() as conn:
         row = conn.execute("SELECT * FROM samples WHERE id = ?", (sample_id,)).fetchone()
         if row is None:
             raise LookupError("sample not found")
+        # Collect file paths BEFORE the row delete (the cascade would otherwise
+        # remove the rows that point at them).
+        file_paths = collect_sample_file_paths(conn, sample_id)
         record_deletion(conn, "samples", row)
         cursor = conn.execute("DELETE FROM samples WHERE id = ?", (sample_id,))
         if cursor.rowcount == 0:
             raise LookupError("sample not found")
+    # Remove live-store files only after the row delete commits; the archive
+    # still holds immutable copies.
+    remove_files(file_paths)
     return {"deleted": sample_id}
