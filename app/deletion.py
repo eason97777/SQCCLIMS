@@ -125,9 +125,9 @@ def _count(conn, sql, args):
 
 
 def sample_delete_preview(sample_id):
-    from app.db import connect_db
+    from app.db import db_session
 
-    with connect_db() as conn:
+    with db_session() as conn:
         sample = conn.execute(
             "SELECT id, sample_display_code FROM samples WHERE id = ?",
             (sample_id,),
@@ -174,9 +174,9 @@ def sample_delete_preview(sample_id):
 
 
 def raw_data_delete_preview(raw_data_id):
-    from app.db import connect_db
+    from app.db import db_session
 
-    with connect_db() as conn:
+    with db_session() as conn:
         raw_data = conn.execute(
             "SELECT id, raw_data_code FROM raw_data WHERE id = ?",
             (raw_data_id,),
@@ -225,9 +225,9 @@ def performance_dataset_delete_preview(dataset_id):
     """Read-only cascade preview for a performance dataset delete. Does not
     delete anything. ``files`` is the number of dataset files that will be
     removed."""
-    from app.db import connect_db
+    from app.db import db_session
 
-    with connect_db() as conn:
+    with db_session() as conn:
         dataset = conn.execute(
             "SELECT id, dataset_name FROM performance_datasets WHERE id = ?",
             (dataset_id,),
@@ -251,9 +251,9 @@ def raw_data_file_delete_preview(file_id):
     delete anything. Reports what ``delete_raw_data_file`` would cascade-remove
     for the file's parent raw_data (parsed_data, parsed_records, and files on
     disk: the source file plus the parent's visualization outputs)."""
-    from app.db import connect_db
+    from app.db import db_session
 
-    with connect_db() as conn:
+    with db_session() as conn:
         file_record = conn.execute(
             "SELECT id, raw_data_id, original_filename, file_path FROM raw_data_files WHERE id = ?",
             (file_id,),

@@ -3,7 +3,7 @@ import uuid
 import app.config as config
 from app.archive import archive_file
 from app.backup import backup_database
-from app.db import connect_db, record_deletion
+from app.db import db_session, record_deletion
 from app.features.samples import get_sample_row
 from app.storage import remove_stored_path, resolve_data_path, save_uploaded_file, storage_path_for
 from app.validation import now_iso, optional_text, require_text, row_dict, rows_dict, safe_path_part
@@ -25,7 +25,7 @@ def get_performance_datasets(query_params):
         args.extend([like, like, like, like, like, like, like, like])
 
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
-    with connect_db() as conn:
+    with db_session() as conn:
         return rows_dict(
             conn.execute(
                 f"""
@@ -41,7 +41,7 @@ def get_performance_datasets(query_params):
         )
 
 def get_performance_dataset_files(dataset_id):
-    with connect_db() as conn:
+    with db_session() as conn:
         dataset = conn.execute("SELECT id FROM performance_datasets WHERE id = ?", (dataset_id,)).fetchone()
         if dataset is None:
             raise LookupError("performance dataset not found")
@@ -70,7 +70,7 @@ def create_performance_dataset(fields, files):
     timestamp = now_iso()
     dataset_token = uuid.uuid4().hex
 
-    with connect_db() as conn:
+    with db_session() as conn:
         sample = get_sample_row(conn, sample_id)
         target_dir = config.UPLOAD_DIR / "performance" / safe_path_part(sample["sample_code"], "sample") / safe_path_part(dataset_name, "dataset")
         target_dir = target_dir / dataset_token
@@ -166,7 +166,7 @@ def create_performance_dataset(fields, files):
 def delete_performance_dataset(dataset_id):
     # Strong-tier delete: snapshot the DB before opening the delete transaction.
     backup_database()
-    with connect_db() as conn:
+    with db_session() as conn:
         row = conn.execute("SELECT * FROM performance_datasets WHERE id = ?", (dataset_id,)).fetchone()
         if row is None:
             raise LookupError("performance dataset not found")

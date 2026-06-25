@@ -14,7 +14,7 @@ from parsers.resistance_heatmap_visualizer import SCRIPT_VERSION as RESISTANCE_H
 from parsers.resistance_heatmap_visualizer import generate_resistance_heatmap_visualization
 
 import app.config as config
-from app.db import connect_db
+from app.db import db_session
 from app.features.parsing import insert_processing_job, parsed_data_row, parsed_data_with_context
 from app.storage import output_paths_from_job_output, output_url_for, relative_output_path, resolve_data_path
 from app.validation import json_object, now_iso, parse_float, row_dict, rows_dict, safe_download_name, to_float_or_none
@@ -156,7 +156,7 @@ def get_resistance_summary(parsed_data_id, payload=None):
     area_filter = request["area"]
     die_filter = request["die_id"]
 
-    with connect_db() as conn:
+    with db_session() as conn:
         parsed = parsed_data_row(conn, parsed_data_id)
         if "resistance" not in str(parsed.get("data_type") or "").lower():
             raise ValueError("parsed data is not resistance data")
@@ -365,7 +365,7 @@ def create_resistance_visualization_job(parsed, payload):
         "finished_at": "",
     }
 
-    with connect_db() as conn:
+    with db_session() as conn:
         job_id = insert_processing_job(conn, job_payload)
         conn.commit()
 
@@ -422,7 +422,7 @@ def create_resistance_visualization_job(parsed, payload):
             },
         }
         finished_at = now_iso()
-        with connect_db() as conn:
+        with db_session() as conn:
             conn.execute(
                 """
                 UPDATE processing_jobs
@@ -435,7 +435,7 @@ def create_resistance_visualization_job(parsed, payload):
             return row_dict(conn.execute("SELECT * FROM processing_jobs WHERE id = ?", (job_id,)).fetchone())
     except Exception as exc:
         finished_at = now_iso()
-        with connect_db() as conn:
+        with db_session() as conn:
             conn.execute(
                 """
                 UPDATE processing_jobs
@@ -449,7 +449,7 @@ def create_resistance_visualization_job(parsed, payload):
 
 def visualize_parsed_data(parsed_data_id, payload=None):
     payload = payload or {}
-    with connect_db() as conn:
+    with db_session() as conn:
         parsed, raw_data = parsed_data_with_context(conn, parsed_data_id)
 
     if parsed["data_type"] == "resistance":
@@ -483,7 +483,7 @@ def visualize_parsed_data(parsed_data_id, payload=None):
         raise ValueError("only violin chart_type is supported")
 
     started_at = now_iso()
-    with connect_db() as conn:
+    with db_session() as conn:
         job_payload = {
             "job_type": "visualization",
             "job_name": f"CD violin visualization {parsed['raw_data_code']}",
@@ -506,7 +506,7 @@ def visualize_parsed_data(parsed_data_id, payload=None):
 
     output_dir = config.OUTPUT_DIR / "visualizations" / "cd_violin" / str(job_id)
     try:
-        with connect_db() as conn:
+        with db_session() as conn:
             cd_sem_records = get_cd_sem_records_for_visualization(conn, parsed_data_id)
         if not cd_sem_records:
             raise ValueError("No CD/SEM parsed_records found for visualization")
@@ -536,7 +536,7 @@ def visualize_parsed_data(parsed_data_id, payload=None):
             "warnings": output["warnings"],
         }
         finished_at = now_iso()
-        with connect_db() as conn:
+        with db_session() as conn:
             conn.execute(
                 """
                 UPDATE processing_jobs
@@ -549,7 +549,7 @@ def visualize_parsed_data(parsed_data_id, payload=None):
             return row_dict(conn.execute("SELECT * FROM processing_jobs WHERE id = ?", (job_id,)).fetchone())
     except Exception as exc:
         finished_at = now_iso()
-        with connect_db() as conn:
+        with db_session() as conn:
             conn.execute(
                 """
                 UPDATE processing_jobs
@@ -566,7 +566,7 @@ def get_visualization_chart_archive(job_id, chart_keys):
     if not selected_keys:
         raise ValueError("请先选择要保存的图表")
 
-    with connect_db() as conn:
+    with db_session() as conn:
         job = row_dict(conn.execute("SELECT * FROM processing_jobs WHERE id = ?", (job_id,)).fetchone())
     if job is None:
         raise LookupError("visualization job not found")
@@ -633,7 +633,7 @@ def get_processing_jobs(query_params):
         args.append(status)
 
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
-    with connect_db() as conn:
+    with db_session() as conn:
         return rows_dict(
             conn.execute(
                 f"""

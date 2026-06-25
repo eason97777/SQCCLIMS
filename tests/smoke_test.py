@@ -22,12 +22,14 @@ import argparse
 import json
 import os
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -84,6 +86,21 @@ def http_delete(url: str, timeout: float = 5.0):
         return resp.status, body
 
 
+def http_post_status(url: str, payload: dict, timeout: float = 10.0):
+    """POST returning (status, body) even on a 4xx/5xx response, so the
+    concurrency case can assert on contention/error status codes."""
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=data, method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status, resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read().decode("utf-8")
+
+
 # GET endpoints that must answer 200 with a JSON body on an empty database.
 READ_ENDPOINTS = [
     "/api/summary",
@@ -97,6 +114,80 @@ READ_ENDPOINTS = [
     "/api/performance-datasets",
     "/api/process-results",
 ]
+
+
+def split_sql_statements(sql: str):
+    """Yield complete SQL statements, honouring sqlite3.complete_statement so
+    multi-line CTE/UPDATE statements stay intact. Mirrors the app's
+    iter_sql_statements without importing app internals."""
+    buffer: list[str] = []
+    for line in sql.splitlines():
+        buffer.append(line)
+        candidate = "\n".join(buffer).strip()
+        if candidate and sqlite3.complete_statement(candidate):
+            yield candidate
+            buffer = []
+    remainder = "\n".join(buffer).strip()
+    if remainder:
+        yield remainder
+
+
+def check_legacy_duplicate_migration() -> tuple[list[str], list[str]]:
+    """003-concurrency-safety AC-006: seed duplicate sample_uids in a scratch DB,
+    apply migrations/006_*.sql, and assert the duplicates are renumbered (earliest
+    UID of each set preserved, all UIDs distinct, unique index created)."""
+    passes: list[str] = []
+    failures: list[str] = []
+    mig = APP_ROOT / "migrations" / "006_samples_uid_unique.sql"
+    if not mig.exists():
+        return passes, [f"migration not found: {mig}"]
+    try:
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            "CREATE TABLE samples (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "sample_uid TEXT NOT NULL DEFAULT '', created_at TEXT)"
+        )
+        seed = [
+            ("SMP-2026-000001", "2026-01-01T10:00"),  # earliest -> keep
+            ("SMP-2026-000001", "2026-01-02T10:00"),  # dup -> renumber
+            ("SMP-2026-000001", "2026-01-03T10:00"),  # dup -> renumber
+            ("SMP-2026-000002", "2026-01-04T10:00"),  # no dup
+            ("", "2026-01-01T00:00"),                  # blank legacy
+            ("", "2026-01-02T00:00"),                  # blank legacy (no collide)
+        ]
+        for uid, ca in seed:
+            conn.execute("INSERT INTO samples (sample_uid, created_at) VALUES (?, ?)", (uid, ca))
+        conn.commit()
+
+        conn.execute("BEGIN")
+        for stmt in split_sql_statements(mig.read_text(encoding="utf-8")):
+            conn.execute(stmt)
+        conn.execute("COMMIT")
+
+        uids = [r["sample_uid"] for r in conn.execute(
+            "SELECT sample_uid FROM samples WHERE sample_uid != '' ORDER BY id")]
+        earliest = conn.execute("SELECT sample_uid FROM samples WHERE id = 1").fetchone()["sample_uid"]
+        has_index = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_samples_uid_unique'"
+        ).fetchone() is not None
+
+        if len(uids) == len(set(uids)):
+            passes.append("legacy-duplicate migration: all sample_uids distinct after renumber")
+        else:
+            failures.append(f"legacy-duplicate migration left duplicates: {uids}")
+        if earliest == "SMP-2026-000001":
+            passes.append("legacy-duplicate migration: earliest UID preserved")
+        else:
+            failures.append(f"earliest UID changed to {earliest} (expected SMP-2026-000001)")
+        if has_index:
+            passes.append("legacy-duplicate migration: idx_samples_uid_unique created")
+        else:
+            failures.append("idx_samples_uid_unique not created")
+        conn.close()
+    except Exception as exc:  # noqa: BLE001
+        failures.append(f"legacy-duplicate migration raised {type(exc).__name__}: {exc}")
+    return passes, failures
 
 
 def wait_until_ready(base: str, proc: subprocess.Popen, timeout: float = 25.0) -> None:
@@ -128,6 +219,12 @@ def run() -> int:
 
     failures: list[str] = []
     passes: list[str] = []
+
+    # In-process migration check (no server needed): AC-006 legacy-duplicate
+    # renumber + unique index.
+    mig_passes, mig_failures = check_legacy_duplicate_migration()
+    passes.extend(mig_passes)
+    failures.extend(mig_failures)
 
     with tempfile.TemporaryDirectory(prefix="sqcclims-smoke-") as tmp:
         env = dict(os.environ)
@@ -228,6 +325,54 @@ def run() -> int:
                         failures.append(f"DELETE /api/samples/{{id}} -> {status} (expected 200/204)")
                 except Exception as exc:  # noqa: BLE001
                     failures.append(f"DELETE raised {type(exc).__name__}: {exc}")
+
+            # 6) Concurrency case (003-concurrency-safety AC-001/002/003) ---
+            # Fire N simultaneous POST /api/samples with distinct identities;
+            # assert every response is 2xx (zero 500s/503s) and every returned
+            # sample_uid is DISTINCT. Exercises busy_timeout + BEGIN IMMEDIATE +
+            # the UID-collision retry loop and the unique index.
+            try:
+                n = 10
+
+                def create_one(i):
+                    payload = {
+                        "sample_code": "CONC",
+                        "name": "conc-sample",
+                        "category": "test",
+                        "batch": f"C{i:03d}",  # distinct -> distinct display code
+                    }
+                    return http_post_status(base + "/api/samples", payload)
+
+                with ThreadPoolExecutor(max_workers=n) as pool:
+                    results = list(pool.map(create_one, range(n)))
+
+                statuses = [s for s, _ in results]
+                bad = [s for s in statuses if s not in (200, 201)]
+                uids = []
+                for s, b in results:
+                    if s in (200, 201):
+                        try:
+                            uids.append(json.loads(b).get("sample_uid"))
+                        except Exception:  # noqa: BLE001
+                            pass
+
+                if bad:
+                    failures.append(
+                        f"concurrent POST /api/samples: {len(bad)}/{n} non-2xx "
+                        f"(statuses={statuses})"
+                    )
+                else:
+                    passes.append(f"concurrent POST /api/samples: all {n} -> 2xx")
+
+                if len(uids) == n and len(set(uids)) == n and all(uids):
+                    passes.append(f"concurrent creates yielded {n} DISTINCT sample_uids")
+                else:
+                    failures.append(
+                        f"concurrent sample_uids not all-distinct/present: "
+                        f"{len(set(uids))} distinct of {len(uids)} (n={n})"
+                    )
+            except Exception as exc:  # noqa: BLE001
+                failures.append(f"concurrency case raised {type(exc).__name__}: {exc}")
 
         finally:
             proc.terminate()

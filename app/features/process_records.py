@@ -1,6 +1,6 @@
 import json
 
-from app.db import connect_db
+from app.db import db_session
 from app.features.mes import complete_mes_step_from_process_record, sync_mes_route_from_submitted_process_records
 from app.migrations import extract_process_layer_name, normalize_process_layer_name
 from app.validation import normalize_sample_text, now_iso, optional_text, row_dict, rows_dict
@@ -65,7 +65,7 @@ def find_process_sample(conn, query_text):
 def search_process_samples(query_params):
     query_text = normalize_sample_text(query_params.get("query", [""])[0])
     stage = normalize_sample_text(query_params.get("stage", [""])[0])
-    with connect_db() as conn:
+    with db_session() as conn:
         if not query_text:
             rows = conn.execute(
                 """
@@ -111,7 +111,7 @@ def search_process_field_suggestions(query_params):
         where.append(f"{column} LIKE ?")
         args.append(f"%{query_text}%")
 
-    with connect_db() as conn:
+    with db_session() as conn:
         rows = conn.execute(
             f"""
             SELECT DISTINCT {column} AS value
@@ -133,7 +133,7 @@ def search_process_layers(query_params):
     if sample_id <= 0:
         return []
 
-    with connect_db() as conn:
+    with db_session() as conn:
         rows = conn.execute(
             """
             SELECT layer_name, details_json, updated_at, created_at, id
@@ -238,7 +238,7 @@ def lookup_process_sample(query_params):
     except ValueError:
         record_no = 1
     record_no = max(record_no, 1)
-    with connect_db() as conn:
+    with db_session() as conn:
         sample = find_process_sample(conn, query_text)
         if not sample:
             raise ValueError("未找到对应的建档样品")
@@ -287,7 +287,7 @@ def save_process_record(payload):
         raise ValueError("unsupported process status")
 
     timestamp = now_iso()
-    with connect_db() as conn:
+    with db_session() as conn:
         sample = conn.execute("SELECT * FROM samples WHERE id = ?", (sample_id,)).fetchone()
         if not sample:
             raise ValueError("未找到对应的建档样品")

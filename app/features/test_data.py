@@ -1,5 +1,5 @@
 
-from app.db import connect_db, record_deletion
+from app.db import db_session, record_deletion
 from app.features.samples import sample_exists
 from app.validation import now_iso, optional_text, parse_float, require_text, row_dict, rows_dict
 
@@ -34,7 +34,7 @@ def get_test_data(query_params):
         ORDER BY td.measured_at DESC, td.id DESC
         LIMIT 1000
     """
-    with connect_db() as conn:
+    with db_session() as conn:
         return rows_dict(conn.execute(sql, args).fetchall())
 
 def normalize_test_record(conn, payload):
@@ -74,7 +74,7 @@ def normalize_test_record(conn, payload):
     }
 
 def create_test_data(payload):
-    with connect_db() as conn:
+    with db_session() as conn:
         record = normalize_test_record(conn, payload)
         cursor = conn.execute(
             """
@@ -108,7 +108,7 @@ def bulk_create_test_data(payload):
 
     inserted = []
     errors = []
-    with connect_db() as conn:
+    with db_session() as conn:
         for index, raw in enumerate(records, start=1):
             try:
                 record = normalize_test_record(conn, raw)
@@ -132,7 +132,7 @@ def bulk_create_test_data(payload):
     return {"inserted": len(inserted), "errors": errors}
 
 def delete_test_data(record_id):
-    with connect_db() as conn:
+    with db_session() as conn:
         row = conn.execute("SELECT * FROM test_data WHERE id = ?", (record_id,)).fetchone()
         if row is None:
             raise LookupError("test data not found")

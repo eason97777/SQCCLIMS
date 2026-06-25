@@ -1,7 +1,7 @@
 import json
 import math
 
-from app.db import connect_db
+from app.db import db_session
 from app.features.samples import sample_exists
 from app.validation import now_iso, optional_text, parse_float, row_dict, rows_dict
 
@@ -159,7 +159,7 @@ def run_processing(payload):
 
     metric_name = optional_text(parameters, "metric_name")
 
-    with connect_db() as conn:
+    with db_session() as conn:
         if sample_id and not sample_exists(conn, sample_id):
             raise ValueError("sample_id not found")
         rows = fetch_processing_source(conn, sample_id=sample_id, metric_name=None if method == "qc" else metric_name)
@@ -192,7 +192,7 @@ def run_processing(payload):
         )
 
 def get_processing_results():
-    with connect_db() as conn:
+    with db_session() as conn:
         return rows_dict(
             conn.execute(
                 """

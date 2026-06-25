@@ -2,9 +2,23 @@ import sqlite3
 from datetime import datetime
 
 from app.backup import backup_database
-from app.db import connect_db, record_deletion
+from app.db import connect_db, db_session, record_deletion
 from app.deletion import collect_sample_file_paths, collect_sample_job_output_paths, remove_files
 from app.validation import has_garbled_text, has_only_punctuation, normalize_sample_text, now_iso, optional_text, require_text, row_dict, rows_dict
+
+
+# Bounded retries for the sample_uid uniqueness race: under contention a second
+# creator may mint a UID another writer just committed. We regenerate and retry
+# a small fixed number of times; beyond that an unresolved collision propagates
+# (handler -> 409) rather than spinning.
+MAX_UID_RETRIES = 5
+
+
+def is_uid_collision(exc):
+    """True iff the IntegrityError is specifically a sample_uid unique violation
+    (the partial unique index idx_samples_uid_unique), not a display-code one."""
+    message = str(exc).lower()
+    return "idx_samples_uid_unique" in message or "samples.sample_uid" in message
 
 
 def generate_sample_uid(conn, year=None):
@@ -142,7 +156,7 @@ def get_samples(query_params):
         GROUP BY s.id
         ORDER BY s.created_at DESC, s.id DESC
     """
-    with connect_db() as conn:
+    with db_session() as conn:
         return rows_dict(conn.execute(sql, args).fetchall())
 
 def create_sample(payload):
@@ -159,29 +173,58 @@ def create_sample(payload):
         "created_at": timestamp,
         "updated_at": timestamp,
     }
-    with connect_db() as conn:
-        validate_sample_hierarchy(conn, sample)
-        sample["sample_uid"] = generate_sample_uid(conn)
-        try:
-            cursor = conn.execute(
-                """
-                INSERT INTO samples (
-                    sample_uid, sample_display_code, sample_code, name, category,
-                    batch, owner, status, received_at, notes, created_at, updated_at
+    # Take the write lock UP FRONT with BEGIN IMMEDIATE so the read-then-write
+    # create path does not start a deferred transaction and then have to upgrade
+    # its lock mid-flight (the classic busy/deadlock trigger). A manual BEGIN
+    # cannot run inside Python sqlite3's implicit transaction management, so we
+    # switch this connection to autocommit (isolation_level = None) and drive
+    # BEGIN IMMEDIATE / COMMIT / ROLLBACK ourselves.
+    conn = connect_db()
+    conn.isolation_level = None
+    try:
+        for _ in range(MAX_UID_RETRIES):
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                validate_sample_hierarchy(conn, sample)
+                sample["sample_uid"] = generate_sample_uid(conn)
+                cursor = conn.execute(
+                    """
+                    INSERT INTO samples (
+                        sample_uid, sample_display_code, sample_code, name, category,
+                        batch, owner, status, received_at, notes, created_at, updated_at
+                    )
+                    VALUES (
+                        :sample_uid, :sample_display_code, :sample_code, :name, :category,
+                        :batch, :owner, :status, :received_at, :notes, :created_at, :updated_at
+                    )
+                    """,
+                    sample,
                 )
-                VALUES (
-                    :sample_uid, :sample_display_code, :sample_code, :name, :category,
-                    :batch, :owner, :status, :received_at, :notes, :created_at, :updated_at
-                )
-                """,
-                sample,
-            )
-        except sqlite3.IntegrityError as exc:
-            raise ValueError("当前样品显示编号已存在，请修改项目编号、样品名称、工艺类型或样品序号。") from exc
-        return row_dict(conn.execute("SELECT * FROM samples WHERE id = ?", (cursor.lastrowid,)).fetchone())
+                row = conn.execute(
+                    "SELECT * FROM samples WHERE id = ?", (cursor.lastrowid,)
+                ).fetchone()
+                conn.execute("COMMIT")
+                return row_dict(row)
+            except sqlite3.IntegrityError as exc:
+                conn.execute("ROLLBACK")
+                if is_uid_collision(exc):
+                    # Another writer committed our UID first; regenerate (now
+                    # seeing the committed row) and retry. The unique index is
+                    # the last line of defense behind BEGIN IMMEDIATE.
+                    continue
+                # Display-code (or other) collision: preserve the existing 400.
+                raise ValueError("当前样品显示编号已存在，请修改项目编号、样品名称、工艺类型或样品序号。") from exc
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+        # Retries exhausted on a genuine, unresolvable UID collision: let the
+        # integrity error reach the handler -> 409.
+        raise sqlite3.IntegrityError("sample_uid collision could not be resolved")
+    finally:
+        conn.close()
 
 def update_sample(sample_id, payload):
-    with connect_db() as conn:
+    with db_session() as conn:
         current = conn.execute("SELECT sample_uid FROM samples WHERE id = ?", (sample_id,)).fetchone()
         if current is None:
             raise LookupError("sample not found")
@@ -227,7 +270,7 @@ def update_sample(sample_id, payload):
 def delete_sample(sample_id):
     # Strong-tier delete: snapshot the DB before opening the delete transaction.
     backup_database()
-    with connect_db() as conn:
+    with db_session() as conn:
         row = conn.execute("SELECT * FROM samples WHERE id = ?", (sample_id,)).fetchone()
         if row is None:
             raise LookupError("sample not found")

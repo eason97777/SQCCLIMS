@@ -1,7 +1,25 @@
 import json
 import sqlite3
+from contextlib import contextmanager
 
 import app.config as config
+
+
+@contextmanager
+def db_session():
+    """Open a connection, manage its transaction, and ALWAYS close it.
+
+    Mirrors `with db_session() as conn:` (commit on success, rollback on
+    exception) but additionally closes the connection deterministically rather
+    than leaving it to GC — important under sustained concurrency. Use this in
+    place of `with db_session() as conn:` at call sites.
+    """
+    conn = connect_db()
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 
 def connect_db():
@@ -11,6 +29,10 @@ def connect_db():
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA synchronous = NORMAL")
+    # Contended writers wait inside SQLite for the single write lock to clear
+    # (up to 5 s) instead of raising "database is locked" instantly. Beyond the
+    # window the OperationalError surfaces and the handler maps it to 503.
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 def record_deletion(conn, table_name, row, pk_field="id"):

@@ -1,5 +1,5 @@
 
-from app.db import connect_db, record_deletion
+from app.db import db_session, record_deletion
 from app.validation import normalize_sample_text, now_iso, optional_text, row_dict, rows_dict
 
 
@@ -83,7 +83,7 @@ def get_mes_route_templates(query_params):
         where.append("status = ?")
         args.append(status)
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
-    with connect_db() as conn:
+    with db_session() as conn:
         return rows_dict(
             conn.execute(
                 f"""
@@ -103,7 +103,7 @@ def get_mes_route_templates(query_params):
         )
 
 def get_mes_route_template_detail(template_id):
-    with connect_db() as conn:
+    with db_session() as conn:
         payload = mes_route_template_payload(conn, template_id)
         if not payload:
             raise LookupError("MES route template not found")
@@ -113,7 +113,7 @@ def get_mes_route_template_by_project(query_params):
     project_code = query_params.get("project_code", [""])[0]
     version = query_params.get("version", [""])[0]
     status = query_params.get("status", ["active"])[0] or "active"
-    with connect_db() as conn:
+    with db_session() as conn:
         template = find_mes_route_template(conn, project_code, version, status)
         if not template:
             raise LookupError("MES route template not found")
@@ -129,7 +129,7 @@ def create_mes_route_template(payload):
         raise ValueError("project_code is required")
 
     timestamp = now_iso()
-    with connect_db() as conn:
+    with db_session() as conn:
         existing = find_mes_route_template(conn, project_code, version, "")
         if existing:
             return mes_route_template_payload(conn, existing["id"])
@@ -161,7 +161,7 @@ def create_mes_route_layer(template_id, payload):
         raise ValueError("layer_name is required")
 
     timestamp = now_iso()
-    with connect_db() as conn:
+    with db_session() as conn:
         template = conn.execute(
             "SELECT * FROM mes_route_templates WHERE id = ?",
             (template_id,),
@@ -206,7 +206,7 @@ def create_mes_route_step(layer_id, payload):
         raise ValueError("step_name is required")
 
     timestamp = now_iso()
-    with connect_db() as conn:
+    with db_session() as conn:
         layer = conn.execute(
             "SELECT * FROM mes_route_layers WHERE id = ?",
             (layer_id,),
@@ -303,7 +303,7 @@ def create_mes_sample_route(payload):
         raise ValueError("sample_id is required")
 
     timestamp = now_iso()
-    with connect_db() as conn:
+    with db_session() as conn:
         sample = conn.execute("SELECT * FROM samples WHERE id = ?", (sample_id,)).fetchone()
         if not sample:
             raise LookupError("sample not found")
@@ -412,7 +412,7 @@ def create_mes_sample_route(payload):
         return mes_sample_route_payload(conn, sample_route_id)
 
 def get_mes_sample_route_by_sample(sample_id):
-    with connect_db() as conn:
+    with db_session() as conn:
         row = conn.execute(
             """
             SELECT id FROM mes_sample_routes
@@ -431,7 +431,7 @@ def update_mes_route_step(step_id, payload):
     default_instruction = optional_text(payload, "default_instruction")
     timestamp = now_iso()
 
-    with connect_db() as conn:
+    with db_session() as conn:
         step = conn.execute(
             """
             SELECT rs.*, rl.route_template_id
@@ -464,7 +464,7 @@ def update_mes_route_step(step_id, payload):
 
 def delete_mes_route_step(step_id):
     timestamp = now_iso()
-    with connect_db() as conn:
+    with db_session() as conn:
         step = conn.execute(
             """
             SELECT rs.*, rl.route_template_id
@@ -629,7 +629,7 @@ def advance_mes_sample_route(sample_route_id, payload):
 
     operator = optional_text(payload, "operator")
     note = optional_text(payload, "note")
-    with connect_db() as conn:
+    with db_session() as conn:
         return advance_mes_sample_route_step(conn, sample_route_id, "skip", operator=operator, note=note)
 
 def has_submitted_process_record_for_mes_step(conn, sample_id, step):

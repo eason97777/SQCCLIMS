@@ -3,6 +3,7 @@ import json
 import mimetypes
 import os
 import shutil
+import sqlite3
 import time
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
@@ -14,7 +15,7 @@ import app.config as config
 from app.logging_setup import get_logger
 from app.errors import AuthenticationError, AuthorizationError, ConflictError
 from app.auth import authorize, auth_status
-from app.db import connect_db
+from app.db import db_session
 from app.features.characterization import characterization_file_path, create_characterization_collection, create_characterization_files, delete_characterization_file, get_characterization_collection, get_characterization_file, get_characterization_files, get_characterization_samples, get_characterization_tree
 from app.features.mes import advance_mes_sample_route, create_mes_route_layer, create_mes_route_step, create_mes_route_template, create_mes_sample_route, delete_mes_route_step, get_mes_route_template_by_project, get_mes_route_template_detail, get_mes_route_templates, get_mes_sample_route_by_sample, update_mes_route_step
 from app.features.parsing import create_mock_parsed_data, get_parsed_data_detail, get_parsed_data_list, get_parsed_data_records, get_parsed_record_options, parse_raw_data
@@ -79,6 +80,20 @@ class AppHandler(BaseHTTPRequestHandler):
             self.send_json({"error": str(exc)}, status=404)
         except ConflictError as exc:
             self.send_json({"error": str(exc)}, status=409)
+        except sqlite3.IntegrityError:
+            # A uniqueness/integrity rule was violated and could not be
+            # auto-resolved (the sample_uid race is retried in-feature). Honest
+            # 409 instead of a misleading 500.
+            self.send_json({"error": "resource conflict"}, status=409)
+        except sqlite3.OperationalError as exc:
+            # The database stayed locked beyond busy_timeout: temporarily
+            # unavailable (503), retry shortly. Other OperationalErrors (genuine
+            # schema/SQL faults) are unexpected and fall through to 500.
+            if "database is locked" in str(exc).lower():
+                self.send_json({"error": "database is busy, please retry"}, status=503)
+            else:
+                logger.exception("unhandled error handling %s %s", method, path)
+                self.send_json({"error": "internal server error", "detail": str(exc)}, status=500)
         except Exception as exc:
             logger.exception("unhandled error handling %s %s", method, path)
             self.send_json({"error": "internal server error", "detail": str(exc)}, status=500)
@@ -427,7 +442,7 @@ class AppHandler(BaseHTTPRequestHandler):
             shutil.copyfileobj(handle, self.wfile)
 
     def send_raw_data_file(self, file_id):
-        with connect_db() as conn:
+        with db_session() as conn:
             record = raw_data_file_row(conn, file_id)
         target = raw_data_upload_file_path(record)
         if not target.is_file():

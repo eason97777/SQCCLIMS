@@ -4,7 +4,7 @@ from pathlib import Path
 import app.config as config
 from app.archive import archive_file
 from app.backup import backup_database
-from app.db import connect_db, record_deletion
+from app.db import connect_db, db_session, record_deletion
 from app.features.samples import get_sample_row
 from app.storage import remove_stored_path, resolve_data_path, save_uploaded_file, storage_path_for
 from app.validation import now_iso, optional_text, row_dict, rows_dict, safe_path_part
@@ -30,7 +30,7 @@ def get_characterization_files(query_params):
         args.extend([like, like, like, like, like, like])
 
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
-    with connect_db() as conn:
+    with db_session() as conn:
         return rows_dict(
             conn.execute(
                 f"""
@@ -126,7 +126,7 @@ def get_or_create_characterization_collection(conn, fields):
     ).fetchone()
 
 def create_characterization_collection(payload):
-    with connect_db() as conn:
+    with db_session() as conn:
         collection_id = create_characterization_collection_record(conn, payload)
         return get_characterization_collection(collection_id, conn=conn)
 
@@ -165,7 +165,7 @@ def get_characterization_samples(query_params):
         where.append("(s.sample_code LIKE ? OR s.name LIKE ? OR s.category LIKE ? OR s.batch LIKE ? OR s.owner LIKE ?)")
         args.extend([like, like, like, like, like])
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
-    with connect_db() as conn:
+    with db_session() as conn:
         return rows_dict(
             conn.execute(
                 f"""
@@ -188,7 +188,7 @@ def get_characterization_samples(query_params):
 
 def get_characterization_tree(sample_id, query_params):
     query = query_params.get("query", [""])[0].strip()
-    with connect_db() as conn:
+    with db_session() as conn:
         sample = row_dict(conn.execute("SELECT * FROM samples WHERE id = ?", (sample_id,)).fetchone())
         if sample is None:
             raise LookupError("sample not found")
@@ -270,7 +270,7 @@ def create_characterization_files(fields, files):
 
     timestamp = now_iso()
     created = []
-    with connect_db() as conn:
+    with db_session() as conn:
         collection = get_or_create_characterization_collection(conn, fields)
         sample_id = collection["sample_id"]
         category = collection["category"] or optional_text(fields, "category") or "未分类"
@@ -329,7 +329,7 @@ def create_characterization_files(fields, files):
 def delete_characterization_file(file_id):
     # Strong-tier delete: snapshot the DB before opening the delete transaction.
     backup_database()
-    with connect_db() as conn:
+    with db_session() as conn:
         row = conn.execute("SELECT * FROM characterization_files WHERE id = ?", (file_id,)).fetchone()
         if row is None:
             raise LookupError("characterization file not found")
@@ -339,7 +339,7 @@ def delete_characterization_file(file_id):
     return {"deleted": file_id}
 
 def get_characterization_file(file_id):
-    with connect_db() as conn:
+    with db_session() as conn:
         row = conn.execute(
             """
             SELECT cf.*, s.sample_code, s.name AS sample_name,

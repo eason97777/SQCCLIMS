@@ -10,7 +10,7 @@ import app.config as config
 from app.archive import archive_file
 from app.backup import backup_database
 from app.errors import ConflictError
-from app.db import connect_db, record_deletion
+from app.db import db_session, record_deletion
 from app.deletion import collect_job_output_paths, remove_files
 from app.features.characterization import preview_type_for_file
 from app.features.samples import build_sample_display_code, generate_sample_uid, get_sample_row
@@ -115,7 +115,7 @@ def get_raw_data_list(query_params):
         args.extend([like, like, like, like, like, like, like])
 
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
-    with connect_db() as conn:
+    with db_session() as conn:
         return rows_dict(
             conn.execute(
                 f"""
@@ -151,7 +151,7 @@ def create_raw_data(payload):
             except json.JSONDecodeError as exc:
                 raise ValueError("metadata_json must be valid JSON") from exc
 
-    with connect_db() as conn:
+    with db_session() as conn:
         sample = get_sample_row(conn, sample_id)
         sample_uid = sample["sample_uid"] or generate_sample_uid(conn)
         sample_display_code = sample["sample_display_code"] or build_sample_display_code(sample)
@@ -199,7 +199,7 @@ def create_raw_data(payload):
         return raw_data_row_with_files(conn, cursor.lastrowid)
 
 def get_raw_data_detail(raw_data_id):
-    with connect_db() as conn:
+    with db_session() as conn:
         return raw_data_row_with_files(conn, raw_data_id)
 
 def save_raw_data_file(file_item, target_dir, raw_data_code):
@@ -232,7 +232,7 @@ def upload_raw_data_files(raw_data_id, files):
         raise ValueError("at least one file is required")
 
     timestamp = now_iso()
-    with connect_db() as conn:
+    with db_session() as conn:
         raw_data = conn.execute("SELECT * FROM raw_data WHERE id = ?", (raw_data_id,)).fetchone()
         if raw_data is None:
             raise LookupError("raw data not found")
@@ -292,7 +292,7 @@ def upload_raw_data_files(raw_data_id, files):
 def delete_raw_data(raw_data_id):
     # Strong-tier delete: snapshot the DB before opening the delete transaction.
     backup_database()
-    with connect_db() as conn:
+    with db_session() as conn:
         raw_data = conn.execute("SELECT storage_path FROM raw_data WHERE id = ?", (raw_data_id,)).fetchone()
         if raw_data is None:
             raise LookupError("raw data not found")
@@ -333,7 +333,7 @@ def delete_raw_data_file(file_id):
     # removes files): snapshot the DB before opening the delete transaction.
     backup_database()
     timestamp = now_iso()
-    with connect_db() as conn:
+    with db_session() as conn:
         file_record = raw_data_file_row(conn, file_id)
         raw_data_id = file_record["raw_data_id"]
         file_count = conn.execute(

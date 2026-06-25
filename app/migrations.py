@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 
 import app.config as config
-from app.db import add_column_if_missing, connect_db, ensure_schema_migrations, process_records_has_legacy_unique, samples_has_legacy_code_unique
+from app.db import add_column_if_missing, db_session, ensure_schema_migrations, process_records_has_legacy_unique, samples_has_legacy_code_unique
 from app.validation import now_iso
 
 
@@ -37,7 +37,7 @@ def run_migrations():
     config.MIGRATIONS_DIR.mkdir(exist_ok=True)
     migration_files = sorted(config.MIGRATIONS_DIR.glob("*.sql"), key=lambda path: path.name)
 
-    with connect_db() as conn:
+    with db_session() as conn:
         ensure_schema_migrations(conn)
         applied_rows = conn.execute(
             "SELECT version, filename, checksum FROM schema_migrations"
@@ -86,7 +86,7 @@ def run_migrations():
             print("No pending migrations.")
 
 def init_db():
-    with connect_db() as conn:
+    with db_session() as conn:
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS samples (

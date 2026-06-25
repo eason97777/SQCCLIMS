@@ -6,7 +6,7 @@ from parsers.cd_template_parser import parse_cd_template_csv
 from parsers.resistance_csv_parser import parse_resistance_csv
 
 import app.config as config
-from app.db import connect_db
+from app.db import db_session
 from app.features.raw_data import raw_data_row_with_files
 from app.storage import raw_data_file_path
 from app.validation import bool_to_int, finite_float_or_none, first_present, int_or_none, json_text, now_iso, optional_text, parse_optional_bool_param, parse_positive_int_param, row_dict, rows_dict, text_or_none
@@ -38,7 +38,7 @@ def get_parsed_data_list(query_params):
         args.append(data_type)
 
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
-    with connect_db() as conn:
+    with db_session() as conn:
         return rows_dict(
             conn.execute(
                 f"""
@@ -53,7 +53,7 @@ def get_parsed_data_list(query_params):
         )
 
 def get_parsed_data_detail(parsed_data_id):
-    with connect_db() as conn:
+    with db_session() as conn:
         return parsed_data_row(conn, parsed_data_id)
 
 def normalized_record_filter(field, value):
@@ -168,7 +168,7 @@ def get_parsed_data_records(parsed_data_id, query_params):
     page_size = parse_positive_int_param(query_params, "page_size", 100, max_value=500)
     offset = (page - 1) * page_size
 
-    with connect_db() as conn:
+    with db_session() as conn:
         parsed_data_row(conn, parsed_data_id)
         where, args, filters = build_parsed_records_filters(parsed_data_id, query_params)
         where_sql = "WHERE " + " AND ".join(where)
@@ -226,7 +226,7 @@ def get_parsed_record_options(parsed_data_id):
         "location",
     ]
 
-    with connect_db() as conn:
+    with db_session() as conn:
         parsed = parsed_data_row(conn, parsed_data_id)
         options = {}
         for field in option_fields:
@@ -447,7 +447,7 @@ def parse_raw_data(raw_data_id, payload=None):
     requested_parser_name = optional_text(payload, "parser_name")
 
     timestamp = now_iso()
-    with connect_db() as conn:
+    with db_session() as conn:
         raw_data = conn.execute("SELECT * FROM raw_data WHERE id = ?", (raw_data_id,)).fetchone()
         if raw_data is None:
             raise LookupError("raw data not found")
@@ -619,7 +619,7 @@ def parse_raw_data(raw_data_id, payload=None):
             )
     except Exception as exc:
         finished_at = now_iso()
-        with connect_db() as conn:
+        with db_session() as conn:
             conn.execute(
                 """
                 UPDATE processing_jobs
@@ -635,7 +635,7 @@ def parse_raw_data(raw_data_id, payload=None):
         raise
 
     finished_at = now_iso()
-    with connect_db() as conn:
+    with db_session() as conn:
         parsed_id = insert_parsed_data(conn, parsed_output)
         output_json = json.dumps(
             {
@@ -677,7 +677,7 @@ def create_mock_parsed_data(payload):
     plots_json = json_text(payload.get("plots"), [])
     timestamp = now_iso()
 
-    with connect_db() as conn:
+    with db_session() as conn:
         raw_data = conn.execute("SELECT * FROM raw_data WHERE id = ?", (raw_data_id,)).fetchone()
         if raw_data is None:
             raise LookupError("raw data not found")

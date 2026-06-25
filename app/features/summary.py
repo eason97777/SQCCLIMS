@@ -1,10 +1,10 @@
 
-from app.db import connect_db
+from app.db import db_session
 from app.validation import row_dict, rows_dict
 
 
 def get_summary():
-    with connect_db() as conn:
+    with db_session() as conn:
         sample_count = conn.execute("SELECT COUNT(*) AS count FROM samples").fetchone()["count"]
         data_count = conn.execute("SELECT COUNT(*) AS count FROM test_data").fetchone()["count"]
         result_count = conn.execute("SELECT COUNT(*) AS count FROM processing_results").fetchone()["count"]
