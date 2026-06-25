@@ -4,36 +4,19 @@ How to work on SQCCLIMS. Read `docs/ARCHITECTURE.md` for the layer map and `docs
 
 ## Repository layout
 
-The application lives directly at the repo root (`SQCCLIMS/`):
+The application lives directly at the repo root (`SQCCLIMS/`); the annotated directory tree is in [`docs/Code_Structure.md`](docs/Code_Structure.md). Unless noted otherwise, run backend commands from the repo root.
 
-```
-SQCCLIMS/                  # repo root
-├── README.md
-├── CONTRIBUTING.md          # this file
-├── docs/                    # ARCHITECTURE, CODE_PRINCIPLES, GLOSSARY (+ legacy notes)
-├── server.py               # thin entrypoint (~38 lines)
-├── app/                    # backend package
-│   ├── config.py, db.py, migrations.py, validation.py, errors.py,
-│   │   storage.py, logging_setup.py, backup.py, auth.py
-│   ├── http/handler.py     # AppHandler: routing + dispatch
-│   └── features/           # one module per domain area
-├── parsers/                # resistance + CD/SEM parsers and visualizers
-├── migrations/             # forward-only SQL migrations
-├── frontend/               # React + TS + Vite SPA (active)
-├── templates/              # downloadable import templates
-├── tests/smoke_test.py     # regression smoke test
-└── history/                # legacy snapshots — large, gitignored, never committed
-```
-
-Unless noted otherwise, run backend commands from the repo root.
+The `docs/` set: ARCHITECTURE (design), BACKEND_MODULES (module reference), Code_Structure (directory map), CODE_PRINCIPLES (coding conventions), Data_Flow (data flow + deletion/safety policy), GLOSSARY (terminology).
 
 ## Dev workflow
+
+New features follow the Spec-Driven Development flow in [`specs/README.md`](specs/README.md) (constitution → spec → plan → tasks → implement). Write the spec/plan/tasks before coding; the [constitution](.specify/memory/constitution.md) governs them all.
 
 1. **Branch off `main`** — never commit directly to `main`.
 2. **Capture a baseline:** `python3 tests/smoke_test.py` before you start.
 3. Make your change in the right layer (thin HTTP handler; logic in features).
 4. **Keep the smoke test green:** run it again after your change. Add coverage for any endpoint you add or change.
-5. If you touched the frontend, build it: `cd frontend && npm install && npm run build`.
+5. If you touched the frontend, lint and build it: `cd frontend && npm install && npm run lint && npm run build`.
 6. Open a PR. Don't commit runtime data, secrets, or build output (see Git conventions).
 
 ## Adding a new endpoint
@@ -54,22 +37,23 @@ Migrations are **forward-only and checksum-guarded** (`app/migrations.py`; rules
 4. Don't add new schema to `init_db()` — that holds the historical baseline only.
 5. Apply by starting the server (`python3 server.py ...`); confirm the new version appears in `schema_migrations` and that restarting does not re-run it.
 
+## Working on parsers
+
+Parser source lives in `parsers/`. When changing parser behavior:
+
+1. Keep parsing logic in the parser modules — don't embed it in UI code.
+2. Keep generated charts, reports, and intermediate files in the runtime output directory.
+3. Don't commit uploaded files or real experimental datasets used for manual testing.
+4. Update the docs when adding a new supported file format or changing expected input templates.
+5. Add or update `templates/` only with safe examples or required source templates.
+
 ## Enabling auth
 
-Auth is **off by default**. Turn it on with environment variables (read at startup/call time):
-
-| Env var | Effect |
-|---------|--------|
-| `LIMS_AUTH_ENABLED=1` | enables token auth + RBAC for `/api/` paths |
-| `LIMS_AUTH_DISABLED=1` | hard override — keeps auth OFF even if enabled |
-| `LIMS_API_TOKENS` | `token1:admin,token2:operator,token3:viewer` |
-
-Roles and permissions: `viewer` (GET), `operator` (GET + POST/PUT/PATCH), `admin` (all, including DELETE). Clients send the token as `Authorization: Bearer <token>` or `X-API-Key: <token>`. Non-API paths (the SPA) are never guarded.
+Auth is off by default. See the auth section in [`README.md`](README.md) for the environment variables, roles, and how to turn it on.
 
 ## Git conventions
 
 - **Don't commit to `main` directly** — branch and open a PR.
-- **`data/` and `history/` are gitignored.** Never commit runtime data: the SQLite database (`*.db`, `*.sqlite`, WAL/SHM files), uploads, outputs, logs, backups, or real experimental data.
-- Also ignored: `node_modules/`, virtualenvs, Python caches, `frontend/dist/`, packaging output.
+- For the full "what not to commit" list (runtime data, databases, secrets, build artifacts), see [`docs/Data_Flow.md`](docs/Data_Flow.md).
 - Before staging, sanity-check with `git status` / `git add -n .` that no secrets, data, database files, or build artifacts are included.
 - Do not commit `.env` or any credentials.

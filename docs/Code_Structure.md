@@ -1,6 +1,8 @@
 # Code Structure
 
 This document explains the main directories and source files in SQCCLIMS.
+It is the **canonical directory map for the repo** — README and CONTRIBUTING
+point here rather than maintaining their own copies of the tree.
 
 > For the layered backend design and request lifecycle, see
 > [`docs/ARCHITECTURE.md`](ARCHITECTURE.md). For a per-module backend reference
@@ -15,8 +17,20 @@ The application lives directly at the repo root (`SQCCLIMS/`).
 
 - `README.md` — project overview, startup, configuration (env vars).
 - `CONTRIBUTING.md` — dev workflow, how to add an endpoint / migration.
-- `docs/` — `ARCHITECTURE.md`, `BACKEND_MODULES.md`, `Data_Flow.md`,
-  `CODE_PRINCIPLES.md`, `GLOSSARY.md` (+ these legacy notes).
+- `docs/` — project documentation set:
+  - `ARCHITECTURE.md` — layered backend design and request lifecycle.
+  - `BACKEND_MODULES.md` — per-module backend reference (responsibility, key
+    functions, endpoints).
+  - `Code_Structure.md` — this file; the canonical directory map.
+  - `CODE_PRINCIPLES.md` — coding conventions and principles.
+  - `Data_Flow.md` — data flow plus the deletion/safety policy (canonical for
+    what must not be committed).
+  - `GLOSSARY.md` — domain and project terminology.
+  - `Development_Guide.md` — redirect/pointer to the docs above.
+- `.specify/` — SDD layer: constitution (`memory/constitution.md`) and the
+  spec/plan/tasks templates (`templates/`).
+- `specs/` — SDD layer: per-feature specs, one directory per feature, each with
+  `spec.md`, `plan.md`, `tasks.md`, `data-model.md`, and a `contracts/` folder.
 - `.gitignore` — excludes secrets, dependency folders, runtime data, generated
   files, packaging output, and caches.
 - `server.py`, `app/`, `parsers/`, `migrations/`, `frontend/`, `templates/`,
@@ -108,5 +122,6 @@ These are runtime-only and must not be committed (only `.gitkeep` placeholders):
 
 - `data/` — `sample_testing.db`, `uploads/`, `outputs/`,
   `logs/`, `backups/`, `archive/`.
-- frontend build output, dependency folders, Python cache folders, and any real
-  experimental or business data.
+
+For the full "what must not be committed" policy, see
+[`docs/Data_Flow.md`](Data_Flow.md) (canonical).

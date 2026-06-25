@@ -5,7 +5,7 @@
 Use this first if Python is installed on the target computer.
 
 ```powershell
-cd D:\BaiduSyncdisk\Code\SCRmonitor\SQCCLIMS
+cd D:\BaiduSyncdisk\Code\SQCCLIMS
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File packaging\build-source-release.ps1
 ```
 
@@ -32,7 +32,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File F:\soft\SQCCLIMS\install
 Install build dependencies on the build computer:
 
 ```powershell
-cd D:\BaiduSyncdisk\Code\SCRmonitor\SQCCLIMS
+cd D:\BaiduSyncdisk\Code\SQCCLIMS
 python -m pip install -r requirements.txt
 ```
 

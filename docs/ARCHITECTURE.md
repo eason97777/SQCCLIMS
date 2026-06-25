@@ -36,21 +36,7 @@ SQCCLIMS's backend is a small, dependency-free Python application organized into
 
 ### Feature layer — `app/features/`
 
-One module per domain area. Each module owns both its HTTP-facing handler functions and the service logic / SQL behind them:
-
-| Module | Responsibility |
-|--------|----------------|
-| `samples.py` | sample CRUD, UID generation, identity validation |
-| `test_data.py` | test-data records (single + bulk) |
-| `process_records.py` | per-sample/layer process records, sample/field lookups |
-| `mes.py` | MES route templates (layers, steps) and per-sample routes/steps/events |
-| `raw_data.py` | raw-data records, multipart file upload, file download/delete |
-| `parsing.py` | parse raw files into parsed_data / parsed_records, list/detail/options |
-| `visualization.py` | resistance summary, parsed-data visualization, chart-archive download, processing jobs |
-| `characterization.py` | characterization collections + files, preview/download, tree |
-| `performance.py` | performance datasets and their files |
-| `processing.py` | generic processing jobs (`/api/process`, `/api/process-results`) |
-| `summary.py` | dashboard summary counts |
+One module per domain area. Each module owns both its HTTP-facing handler functions and the service logic / SQL behind them. For the full module reference (domain + main endpoints) see [`BACKEND_MODULES.md`](BACKEND_MODULES.md#feature-layer-appfeaturespy).
 
 ### Domain / data-access layer
 
@@ -73,21 +59,7 @@ Standalone parser/visualizer modules (`resistance_csv_parser.py`, `resistance_he
 
 ## Request lifecycle
 
-Every request flows through `AppHandler.route()`:
-
-```
-request
-  → route(method)                       # parse URL + query, start timer
-      → authorize(method, path, headers) # no-op unless auth enabled; guards /api/ only
-      → if path startswith /api/:
-            handle_api(method, path, query)   # large dispatch table → feature handler
-              → feature handler            # validation + parameterized SQL via connect_db()
-              → DB
-        else:
-            serve_static(path)             # SPA fallback to index.html
-  → send_json(payload, status)            # JSON response
-  → finally: access log (method, path, status, duration_ms)
-```
+Every request flows through `AppHandler.route()`: parse URL + query, run `authorize()` (a no-op unless auth is enabled), dispatch `/api/` paths through `handle_api()` to a feature handler (validation + parameterized SQL) and everything else to the static SPA, then serialize the JSON response. For the step-by-step lifecycle see [`BACKEND_MODULES.md`](BACKEND_MODULES.md#http-layer-apphttphandlerpy).
 
 Two cross-cutting behaviors wrap the dispatch:
 
@@ -96,16 +68,7 @@ Two cross-cutting behaviors wrap the dispatch:
 
 ### Exception → HTTP status map
 
-Feature code signals failures by raising exceptions; the handler maps them centrally (so handlers never build status codes by hand):
-
-| Exception | Status |
-|-----------|--------|
-| `ValueError` | 400 Bad Request |
-| `AuthenticationError` | 401 Unauthorized |
-| `AuthorizationError` | 403 Forbidden |
-| `LookupError` | 404 Not Found |
-| `ConflictError` | 409 Conflict |
-| anything else | 500 Internal Server Error |
+Feature code signals failures by raising exceptions; the handler maps them centrally (so handlers never build status codes by hand). For the canonical mapping table see [`CODE_PRINCIPLES.md#exception--http-status-mapping`](CODE_PRINCIPLES.md#exception--http-status-mapping).
 
 ## Data model
 
@@ -121,7 +84,7 @@ samples ─┬─ test_data
                           └─ processing_jobs  (visualization / chart jobs)
 ```
 
-- **samples** — the root entity. Identity is the composite (`sample_code`, `name`, `category`, `batch`) plus a generated `sample_uid` (`SMP-YYYY-NNNNNN`) and a unique `sample_display_code`.
+- **samples** — the root entity. Identity is the composite (`sample_code`, `name`, `category`, `batch`) plus a generated, **unique** `sample_uid` (`SMP-YYYY-NNNNNN`; partial unique index `idx_samples_uid_unique`) and a unique `sample_display_code`.
 - **test_data** — numeric metric records per sample.
 - **process_records** — per (sample, stage, layer, record_no) process detail; unique on that tuple.
 - **raw_data / raw_data_files** — a raw-data record and its uploaded files; `parser_status` tracks parse state.

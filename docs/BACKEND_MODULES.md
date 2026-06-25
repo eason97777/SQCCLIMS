@@ -51,8 +51,7 @@ attributes at call time (`config.DB_PATH`, never bind at import).
 **Responsibility:** Domain exceptions and the exception→HTTP status convention.
 Feature code raises; the handler maps centrally.
 **Key:** `ConflictError`, `AuthenticationError`, `AuthorizationError`.
-**Status map:** `ValueError`→400, `AuthenticationError`→401,
-`AuthorizationError`→403, `LookupError`→404, `ConflictError`→409, else→500.
+**Status map:** see [`CODE_PRINCIPLES.md#exception--http-status-mapping`](CODE_PRINCIPLES.md#exception--http-status-mapping).
 **Used by:** features, http, auth.
 
 ### `app/validation.py`
@@ -70,7 +69,11 @@ coercion; `has_garbled_text` → detect mojibake markers; `json_text`/`json_obje
 ### `app/db.py`
 **Responsibility:** SQLite connections and shared DB helpers.
 **Key functions:** `connect_db()` → open SQLite with `Row` factory + PRAGMAs
-(`foreign_keys = ON`, `journal_mode = WAL`, `synchronous = NORMAL`);
+(`foreign_keys = ON`, `journal_mode = WAL`, `synchronous = NORMAL`,
+`busy_timeout = 5000` so contended writers wait inside SQLite instead of erroring
+instantly); `db_session()` → context manager that wraps `connect_db()` with the
+transaction context **and** closes the connection deterministically (use
+`with db_session() as conn:` at call sites instead of `with connect_db()`);
 `record_deletion(conn, table, row, pk_field)` → write a JSON row snapshot into
 `deletion_audit`; `ensure_schema_migrations` / `table_columns` /
 `add_column_if_missing` / `unique_index_columns` / `samples_has_legacy_code_unique`
@@ -181,10 +184,10 @@ feature handler), else `serve_static(path)` (SPA fallback to `index.html`) →
 `send_json(payload, status)` → **`finally`:** access-log
 `METHOD PATH status=… duration_ms=…`.
 
-**Exception → status:** a `try/except` chain maps `ValueError`→400,
-`AuthenticationError`→401, `AuthorizationError`→403, `LookupError`→404,
-`ConflictError`→409, and any other `Exception`→500 (logged with full traceback
-via `logger.exception`).
+**Exception → status:** a `try/except` chain maps domain exceptions to HTTP
+status (any other `Exception`→500, logged with full traceback via
+`logger.exception`); see the canonical table in
+[`CODE_PRINCIPLES.md#exception--http-status-mapping`](CODE_PRINCIPLES.md#exception--http-status-mapping).
 
 **Key methods:** `handle_api` (route table), `read_json` / `read_multipart`
 (parse bodies), `path_id` (extract numeric id), `send_json`, `serve_static`,
@@ -204,7 +207,7 @@ them. The handler dispatches to the functions named below.
 
 | Module | Domain | Main endpoints (→ handler) |
 |--------|--------|----------------------------|
-| `samples.py` | Samples (LIMS root): CRUD, UID generation, identity validation. | `GET /api/samples`→`get_samples`; `POST /api/samples`→`create_sample`; `PUT /api/samples/{id}`→`update_sample`; `DELETE /api/samples/{id}`→`delete_sample` |
+| `samples.py` | Samples (LIMS root): CRUD, UID generation, identity validation. `create_sample` takes the write lock up front (`BEGIN IMMEDIATE`, autocommit conn) and retries `generate_sample_uid` on a `sample_uid` UNIQUE collision so concurrent creates get distinct `SMP-YYYY-NNNNNN` UIDs; `sample_uid` uniqueness is enforced by the partial unique index `idx_samples_uid_unique` (migration 006). | `GET /api/samples`→`get_samples`; `POST /api/samples`→`create_sample`; `PUT /api/samples/{id}`→`update_sample`; `DELETE /api/samples/{id}`→`delete_sample` |
 | `test_data.py` | Numeric test-data records (single + bulk). | `GET /api/test-data`→`get_test_data`; `POST /api/test-data`→`create_test_data`; `POST /api/test-data/bulk`→`bulk_create_test_data`; `DELETE /api/test-data/{id}`→`delete_test_data` |
 | `process_records.py` | Per-sample/layer process records; sample/field/layer lookups; auto-advances MES on submit. | `GET /api/process-records/sample-lookup`→`lookup_process_sample`; `…/sample-suggestions`→`search_process_samples`; `…/field-suggestions`→`search_process_field_suggestions`; `…/layers`→`search_process_layers`; `POST`/`PUT /api/process-records`→`save_process_record` |
 | `mes.py` | MES route templates (layers, steps) and per-sample routes/steps/events. | `GET`/`POST /api/mes-route-templates`→`get_mes_route_templates`/`create_mes_route_template`; `…/by-project`→`get_mes_route_template_by_project`; `GET /api/mes-route-templates/{id}`→`get_mes_route_template_detail`; `POST …/{id}/layers`→`create_mes_route_layer`; `POST /api/mes-route-layers/{id}/steps`→`create_mes_route_step`; `PATCH`/`DELETE /api/mes-route-steps/{id}`→`update_mes_route_step`/`delete_mes_route_step`; `POST /api/mes-sample-routes`→`create_mes_sample_route`; `POST …/{id}/advance`→`advance_mes_sample_route`; `GET /api/samples/{id}/mes-route`→`get_mes_sample_route_by_sample` |
@@ -303,19 +306,5 @@ regression. Keep it green.
 
 ## Environment variables
 
-Matches the [`README.md`](../README.md) configuration table.
-
-| Env var | Meaning | Default |
-|---------|---------|---------|
-| `LIMS_HOST` | bind host | `0.0.0.0` |
-| `PORT` | bind port | `8000` |
-| `LIMS_DATA_DIR` | runtime data directory | `data` |
-| `LIMS_ARCHIVE_DIR` | append-only upload archive directory | `<data-dir>/archive` |
-| `LIMS_AUTH_ENABLED` | turn token auth ON (truthy) | off |
-| `LIMS_AUTH_DISABLED` | hard-override that keeps auth OFF | off |
-| `LIMS_API_TOKENS` | `token:role,...` (roles: viewer/operator/admin) | empty |
-| `LIMS_ENABLE_MOCK` | enable `POST /api/parsed-data/mock` (404 otherwise) | off |
-
-> Enabling auth: set `LIMS_AUTH_ENABLED=1` + `LIMS_API_TOKENS`; the frontend shows
-> a login screen, users paste their access token, and it is attached to all requests.
-> See the README "Enabling auth" section. Auth defaults OFF.
+See the canonical [Configuration table](../README.md#configuration) in `README.md`.
+Enabling auth: see the canonical [Enabling auth](../README.md#enabling-auth) section in `README.md`.

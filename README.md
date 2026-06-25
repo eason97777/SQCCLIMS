@@ -2,6 +2,28 @@
 
 SQCCLIMS is a locally-run **LIMS/MES** for a semiconductor / materials sample-testing lab. It runs as a single desktop-grade web application that keeps sample tracking, process records, MES process routes, raw measurement data, parsing, and visualization together in one local SQLite store — no cloud, no external services.
 
+## Start here
+
+**New to the codebase?** Read in this order, then trace one request through the code:
+
+1. This README — get it running (see [Quickstart](#quickstart)) and confirm health: `python3 tests/smoke_test.py`.
+2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the mental model: 4 layers (HTTP → Features → Domain/Data → Infra) and the one-way dependency rule. **Most important doc.**
+3. [`docs/Code_Structure.md`](docs/Code_Structure.md) — where everything lives.
+4. [`docs/BACKEND_MODULES.md`](docs/BACKEND_MODULES.md) — per-module reference. Then **deep-read one feature**: `app/features/samples.py` alongside [`specs/001-samples/`](specs/001-samples/). One feature teaches all of them — they share the same shape.
+5. [`docs/Data_Flow.md`](docs/Data_Flow.md) — how data moves + the deletion/data-safety policy (read before touching any delete path).
+6. [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — keep it open for the domain terms.
+
+> **Best single move:** trace `GET /api/samples` through the layers — dispatched in `app/http/handler.py` → handled in `app/features/samples.py` → SQL via `app/db.py`. That 15-minute trace beats an hour of reading.
+
+**Ready to make a change?**
+
+- Rules you must follow: [`.specify/memory/constitution.md`](.specify/memory/constitution.md) (the short, distilled version is in [`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md) at the repo root).
+- How-to (add an endpoint, add a migration, git conventions): [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- **Non-trivial feature** → follow the SDD flow: write `specs/NNN-slug/spec.md` (what/why) → `plan.md` (how, with the Constitution Check) → `tasks.md` → implement. Clone [`specs/001-samples/`](specs/001-samples/) as your example. See [`specs/README.md`](specs/README.md).
+- **Small fix** → skip the spec; just respect the constitution and keep `python3 tests/smoke_test.py` green before and after.
+
+`docs/` explains the system **as-built**; `specs/` is how new features get **specified**; the constitution governs both. If a doc ever disagrees with the code, trust the code and flag the doc.
+
 ## What it does
 
 - **Sample tracking (LIMS)** — register samples, test data, characterization files, and performance datasets.
@@ -28,7 +50,7 @@ The backend is intentionally dependency-free so it can be packaged and run on a 
 SQCCLIMS/                 # repo root
 ├── README.md               # this file
 ├── CONTRIBUTING.md         # dev workflow, adding endpoints / migrations
-├── docs/                   # ARCHITECTURE, CODE_PRINCIPLES, GLOSSARY (+ legacy notes)
+├── docs/                   # ARCHITECTURE, BACKEND_MODULES, Code_Structure, CODE_PRINCIPLES, Data_Flow, GLOSSARY
 ├── server.py               # thin entrypoint
 ├── app/                    # backend package (config, db, http, features, …)
 ├── parsers/                # resistance + CD/SEM parsers and visualizers
@@ -38,6 +60,8 @@ SQCCLIMS/                 # repo root
 ├── tests/smoke_test.py     # regression smoke test
 └── history/                # legacy snapshots, gitignored
 ```
+
+The tree above is a top-level overview; [`docs/Code_Structure.md`](docs/Code_Structure.md) is the full directory map.
 
 ## Quickstart
 
@@ -122,10 +146,20 @@ unchanged. `LIMS_AUTH_DISABLED=1` hard-forces auth off even if enabled.
 
 ## Documentation
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layered architecture, request lifecycle, data model, infra.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layered architecture design (layer diagram, dependency direction, data model, infra).
 - [`docs/BACKEND_MODULES.md`](docs/BACKEND_MODULES.md) — per-module backend reference (responsibility, key functions, endpoints).
+- [`docs/Code_Structure.md`](docs/Code_Structure.md) — the full directory map.
+- [`docs/CODE_PRINCIPLES.md`](docs/CODE_PRINCIPLES.md) — coding conventions for humans and coding agents.
 - [`docs/Data_Flow.md`](docs/Data_Flow.md) — data flow + the authoritative deletion & data-safety policy.
-- [`docs/CODE_PRINCIPLES.md`](docs/CODE_PRINCIPLES.md) — conventions for humans and coding agents.
 - [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — plain-language definitions of domain and tech terms.
+- [`docs/Development_Guide.md`](docs/Development_Guide.md) — redirect to [`CONTRIBUTING.md`](CONTRIBUTING.md) / this README.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — dev workflow, adding endpoints, adding migrations.
 - [`migrations/README.md`](migrations/README.md) — migration mechanics.
+
+### Spec-Driven Development (SDD)
+
+`docs/` is the **as-built** technical reference; `specs/` is the forward-looking, per-feature **what/why/how** layer, governed by the project constitution.
+
+- [`specs/README.md`](specs/README.md) — the SDD workflow (Spec → Plan → Tasks → Implement) and feature numbering.
+- [`.specify/memory/constitution.md`](.specify/memory/constitution.md) — the project constitution: non-negotiable principles + governance.
+- Worked exemplars under [`specs/`](specs/): [`001-samples/`](specs/001-samples/) and [`002-raw-data-parsing/`](specs/002-raw-data-parsing/).

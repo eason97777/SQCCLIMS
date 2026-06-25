@@ -1,6 +1,8 @@
 # Code Principles
 
-Conventions for everyone working in this codebase — humans and coding agents alike. They exist to keep a deliberately small, dependency-free backend small and dependency-free. Read `ARCHITECTURE.md` first for the layer map.
+> Principles and governance live in the [constitution](../.specify/memory/constitution.md); this file is the concrete coding-conventions reference (examples + conventions).
+
+A coding-conventions reference for everyone working in this codebase — humans and coding agents alike. Read `ARCHITECTURE.md` first for the layer map.
 
 ## 1. Respect the layering and dependency direction
 
@@ -14,7 +16,7 @@ No import cycles. If a low-level module genuinely needs something from a higher 
 
 ## 2. Access runtime config as attributes, at call time
 
-`config.configure_paths()` **reassigns** `DATA_DIR`, `DB_PATH`, `UPLOAD_DIR`, `OUTPUT_DIR`, `LOG_DIR` at startup. Binding them at import time captures stale values.
+`config.configure_paths()` reassigns `DATA_DIR`, `DB_PATH`, `UPLOAD_DIR`, `OUTPUT_DIR`, `LOG_DIR` at startup, so binding them at import time captures stale values. Always `import app.config as config` and read `config.<NAME>` when you use it.
 
 ```python
 import app.config as config
@@ -23,15 +25,15 @@ db = config.DB_PATH          # ✅ resolved at call time
 from app.config import DB_PATH   # ❌ frozen at import, ignores configure_paths()
 ```
 
-Always `import app.config as config` and read `config.<NAME>` when you use it.
-
 ## 3. One feature = one module
 
 Each domain area is a single module under `app/features/`. Put validation and SQL there. The HTTP handler stays thin: parse the request, call a feature function, serialize the result. Do not add business logic to `handler.py`, and do not spread one feature across several modules.
 
 ## 4. Error handling via the exception convention
 
-Don't build status codes in feature code. Raise the right exception and let `AppHandler.route()` map it:
+Don't build status codes in feature code. Raise the right exception and let `AppHandler.route()` map it: invalid input → `ValueError`; missing entity → `LookupError`; uniqueness/state conflict → `ConflictError`. The full mapping is the canonical table below.
+
+### Exception → HTTP status mapping
 
 | Raise | Becomes |
 |-------|---------|
@@ -40,9 +42,9 @@ Don't build status codes in feature code. Raise the right exception and let `App
 | `AuthorizationError` | 403 Forbidden |
 | `LookupError` | 404 Not Found |
 | `ConflictError` | 409 Conflict |
+| `sqlite3.IntegrityError` | 409 Conflict (uniqueness/integrity collision that could not be auto-resolved) |
+| `sqlite3.OperationalError` *(message contains "database is locked")* | 503 Service Unavailable (busy beyond `busy_timeout`; retry shortly) |
 | anything else | 500 (logged with full traceback) |
-
-So: invalid input → `ValueError`; missing entity → `LookupError`; uniqueness/state conflict → `ConflictError`.
 
 ## 5. Parameterized SQL only
 
@@ -50,11 +52,11 @@ Never string-format user input into SQL. Use `?` placeholders or named parameter
 
 ## 6. No new third-party dependencies without approval
 
-The backend is intentionally **stdlib-only** (`http.server`, `sqlite3`, etc.) so it can be packaged and run on a lab workstation. Adding a web framework, ORM, or chart library defeats that. Get explicit approval before adding anything to `requirements.txt`. The frontend uses npm normally, but keep its footprint lean too.
+The backend core is intentionally **stdlib-only** (`http.server`, `sqlite3`, etc.). Get explicit approval before adding anything to `requirements.txt`; third-party scientific dependencies are confined to `parsers/`. The frontend uses npm normally, but keep its footprint lean too.
 
 ## 7. Keep the smoke test green
 
-`tests/smoke_test.py` is the green-light oracle. Run it before a change to capture a baseline and after every change to prove nothing regressed:
+Run `tests/smoke_test.py` before a change to capture a baseline and after every change to prove nothing regressed:
 
 ```bash
 python3 tests/smoke_test.py
@@ -72,7 +74,7 @@ Follow the existing style. Comment non-obvious logic and invariants, not what th
 
 ## Deliberately deferred (known future directions)
 
-These are intentionally **not** built yet. Don't treat their absence as a bug; if you need them, raise it rather than bolting on a partial version:
+These are intentionally **not** built yet. Don't treat their absence as a bug; if you need them, raise it rather than bolting on a partial version (see the constitution on deferred features):
 
 - **Full cascading soft-delete.** Today deletes are hard deletes with a `deletion_audit` JSON snapshot for recoverability. A first-class soft-delete (status flags + cascade) is deferred.
 - **A repository layer.** SQL currently lives inline in feature modules. Extracting a repository/data-access layer to remove inline SQL is a future refactor.

@@ -9,14 +9,14 @@ https://jrsoftware.org/isdl.php
 Build installer:
 
 ```powershell
-cd D:\BaiduSyncdisk\Code\SCRmonitor\SQCCLIMS
+cd D:\BaiduSyncdisk\Code\SQCCLIMS
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File packaging\installer\build-installer.ps1
 ```
 
 Output:
 
 ```text
-D:\BaiduSyncdisk\Code\SCRmonitor\SQCCLIMS\packaging\output\SQCCLIMS_Setup_1.0.0.exe
+D:\BaiduSyncdisk\Code\SQCCLIMS\packaging\output\SQCCLIMS_Setup_1.0.0.exe
 ```
 
 Build update package with the same staging files by opening `SQCCLIMS_Update.iss` in Inno Setup Compiler, or changing the script to compile that file.
