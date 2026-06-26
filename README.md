@@ -153,7 +153,7 @@ unchanged. `LIMS_AUTH_DISABLED=1` hard-forces auth off even if enabled.
 - [`docs/Data_Flow.md`](docs/Data_Flow.md) — data flow + the authoritative deletion & data-safety policy.
 - [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — plain-language definitions of domain and tech terms.
 - [`docs/Development_Guide.md`](docs/Development_Guide.md) — redirect to [`CONTRIBUTING.md`](CONTRIBUTING.md) / this README.
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — dev workflow, adding endpoints, adding migrations.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — GitHub Flow (branch → PR → review → squash-merge), dev workflow, adding endpoints/migrations.
 - [`migrations/README.md`](migrations/README.md) — migration mechanics.
 
 ### Spec-Driven Development (SDD)

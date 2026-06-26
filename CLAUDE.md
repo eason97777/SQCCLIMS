@@ -25,6 +25,19 @@ Every `spec.md`, `plan.md`, and `tasks.md` MUST comply with the constitution, an
 4. **Put detail in the right place:** API contracts in `specs/NNN-slug/contracts/`, schema/migration detail in `specs/NNN-slug/data-model.md`.
 5. **Match the worked exemplar:** [`specs/001-samples/`](specs/001-samples/).
 
+## Development workflow (git)
+
+We use **GitHub Flow**. `main` is always deployable — **never commit to or push `main` directly.**
+
+- **Branch first.** Before starting any work, cut a short-lived branch off `main`: `feat/<slug>`, `fix/<slug>`, or `chore/<slug>`.
+- **Atomic, conventional commits.** Keep each commit small and self-contained. Use Conventional Commits: `feat:`, `fix:`, `refactor:`, `chore:`, `docs:` (scopes allowed, e.g. `feat(samples):`).
+- **Confirm before committing.** Stage the change, then show the human the **diff** and the **proposed commit message**, and wait for explicit confirmation before running `git commit`. Never commit unprompted.
+- **Humans own PRs.** Prepare the branch and commits and surface the diff; a human opens and approves the Pull Request. **Do not open or merge a PR unless explicitly asked.**
+- **Review comments are the next task.** When given PR review feedback, treat each comment as a work item — address every one, then re-surface the updated diff.
+- **Never rewrite history without explicit confirmation.** No `push --force`, `reset --hard`, rebase, or other history-rewriting command unless the human asks for it in that moment.
+
+The full loop (branch → commit → PR → review → squash-merge) is documented for humans in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 ## Green light
 
 ```sh

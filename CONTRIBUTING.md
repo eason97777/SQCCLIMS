@@ -8,16 +8,27 @@ The application lives directly at the repo root (`SQCCLIMS/`); the annotated dir
 
 The `docs/` set: ARCHITECTURE (design), BACKEND_MODULES (module reference), Code_Structure (directory map), CODE_PRINCIPLES (coding conventions), Data_Flow (data flow + deletion/safety policy), GLOSSARY (terminology).
 
-## Dev workflow
+## Dev workflow (GitHub Flow)
 
-New features follow the Spec-Driven Development flow in [`specs/README.md`](specs/README.md) (constitution → spec → plan → tasks → implement). Write the spec/plan/tasks before coding; the [constitution](.specify/memory/constitution.md) governs them all.
+We use **GitHub Flow**: `main` is always deployable and **protected** — all work lands via reviewed Pull Requests, never a direct commit to `main`.
 
-1. **Branch off `main`** — never commit directly to `main`.
+New features also follow the Spec-Driven Development flow in [`specs/README.md`](specs/README.md) (constitution → spec → plan → tasks → implement): write the spec/plan/tasks before coding; the [constitution](.specify/memory/constitution.md) governs them all.
+
+The loop:
+
+1. **Branch off `main`** with a prefixed, descriptive name: `feat/<slug>`, `fix/<slug>`, or `chore/<slug>`. Keep branches short-lived.
 2. **Capture a baseline:** `python3 tests/smoke_test.py` before you start.
-3. Make your change in the right layer (thin HTTP handler; logic in features).
-4. **Keep the smoke test green:** run it again after your change. Add coverage for any endpoint you add or change.
+3. **Make the change in the right layer** (thin HTTP handler; logic in features), in small **atomic commits** using Conventional Commits (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:` — scopes welcome, e.g. `fix(parsing):`).
+4. **Keep the smoke test green:** run it again after your change and add coverage for any endpoint you add or change.
 5. If you touched the frontend, lint and build it: `cd frontend && npm install && npm run lint && npm run build`.
-6. Open a PR. Don't commit runtime data, secrets, or build output (see Git conventions).
+6. **Push your branch and open a Pull Request** against `main`. Don't commit runtime data, secrets, or build output (see Git conventions).
+
+## Pull requests & review
+
+- A PR targets `main` and describes **what** changed and **why** (link the `specs/NNN-*` if there is one).
+- A reviewer reads the diff and leaves **inline comments**, then **approves** or **requests changes**. Address every requested change with follow-up commits and re-request review.
+- Once approved and green, the PR is **squash-merged** into `main` (one tidy commit per feature) and the branch is deleted.
+- `main` is protected: no direct pushes, no force-pushes, no history rewrites.
 
 ## Adding a new endpoint
 
@@ -53,7 +64,9 @@ Auth is off by default. See the auth section in [`README.md`](README.md) for the
 
 ## Git conventions
 
-- **Don't commit to `main` directly** — branch and open a PR.
+- **Branch, never commit to `main` directly.** Use `feat/*`, `fix/*`, `chore/*`; merge via PR.
+- **Conventional Commits**, small and atomic: `feat:`, `fix:`, `refactor:`, `chore:`, `docs:`.
+- **No history rewriting on shared branches** — avoid `push --force`, `reset --hard`, and rebasing already-pushed work unless coordinated.
 - For the full "what not to commit" list (runtime data, databases, secrets, build artifacts), see [`docs/Data_Flow.md`](docs/Data_Flow.md).
 - Before staging, sanity-check with `git status` / `git add -n .` that no secrets, data, database files, or build artifacts are included.
 - Do not commit `.env` or any credentials.
