@@ -295,7 +295,7 @@ regression. Keep it green.
 ## How to extend
 
 - **Add an endpoint:** implement the handler in the right `app/features/*.py`
-  (validation + parameterized SQL via `connect_db()`), register a `method`/`path`
+  (validation + parameterized SQL via `db_session()`), register a `method`/`path`
   branch in `handle_api()`, signal errors with exceptions, extend
   `tests/smoke_test.py`. See [`../CONTRIBUTING.md`](../CONTRIBUTING.md).
 - **Add a migration:** create the next-numbered `migrations/NNN_*.sql` (plain

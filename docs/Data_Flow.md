@@ -206,7 +206,7 @@ restores from the archive/backup, guided by `deletion_audit`.
 | `samples` | Strong | all children cascade; `processing_jobs` rows deleted explicitly | yes — raw/char/perf files **and** `processing_jobs` visualization outputs | archive + DB backup |
 | `raw_data` | Strong | files, parsed_data, parsed_records; `processing_jobs` rows deleted explicitly | yes — raw files **and** `processing_jobs` visualization outputs | archive + DB backup |
 | `raw_data_files` (one file) | Strong | parsed_data, parsed_records, `processing_jobs` for the parent raw_data | yes — the file **and** visualization outputs; takes a per-delete DB backup | archive + DB backup |
-| `parsed_data` | Strong | parsed_records (after migration) | generated outputs | DB backup |
+| `parsed_data` (no direct delete; removed via parent cascade) | Strong | parsed_records (after migration) | generated outputs | DB backup |
 | `characterization` file/collection | Strong | collection → files | yes | archive + DB backup |
 | `performance_datasets` | Strong | dataset files | yes | archive + DB backup |
 | `test_data` (one point) | Simple | none | none | DB backup / `deletion_audit` |

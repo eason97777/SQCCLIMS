@@ -105,7 +105,7 @@ samples ─┬─ test_data
 
 ## Infrastructure details
 
-- **SQLite WAL mode.** `connect_db()` opens each connection with `PRAGMA foreign_keys = ON`, `journal_mode = WAL`, `synchronous = NORMAL` — concurrent reads during writes, with foreign keys enforced.
+- **SQLite WAL mode.** `connect_db()` opens each connection with `PRAGMA foreign_keys = ON`, `journal_mode = WAL`, `synchronous = NORMAL`, `busy_timeout = 5000` — concurrent reads during writes, with foreign keys enforced.
 - **Startup backups.** `backup_database()` runs once at startup, copying the live DB into `data/backups/sample_testing_<timestamp>.db` via SQLite's online-backup API, retaining the **10** most recent and pruning the rest. Backup failure is logged and never blocks startup.
 - **Deletion-audit snapshots.** Deletes capture a full row snapshot into `deletion_audit` before removal (see above).
 - **Optional auth.** `auth.py` enforces token auth + RBAC only when `LIMS_AUTH_ENABLED` is truthy (and `LIMS_AUTH_DISABLED` is not). Default is OFF — `authorize()` is a no-op and the API behaves as if auth did not exist. Tokens come from `LIMS_API_TOKENS`; roles are admin/operator/viewer with GET≤operator-write≤admin-delete policy. All env vars are read at call time.
