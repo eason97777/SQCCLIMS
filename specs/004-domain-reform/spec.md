@@ -117,10 +117,9 @@ measurements **with no data migration**.
   rows; new performance uploads are reframed to write `raw_data`
   (`data_type='performance'`) going forward. *(US-3; Phase 2)*
 - **FR-006.** Surfacing performance rows as Artifacts MUST be **forward-only and
-  non-destructive**: the `artifacts` / `artifact_files` views read the existing
-  `performance_datasets` / `performance_dataset_files` tables **in place** — no
-  rows or files are copied, moved, or mutated, and the source tables are
-  retained. *(US-3, US-6; Phase 2)*
+  non-destructive**: the `artifacts` view reads the existing
+  `performance_datasets` table **in place** — no rows or files are copied, moved,
+  or mutated, and the source tables are retained. *(US-3, US-6; Phase 2)*
 - **FR-007.** *(Deferred — out of scope for this reform.)* Extending the
   Visualization transform to source the unified Measurements read model is
   **deferred**: its charts (resistance heatmap, CD violin) require per-record
@@ -302,9 +301,9 @@ measurements **with no data migration**.
 **Phase 2 — artifacts read model:**
 - **AC-007.** Given performance datasets exist, when the `artifacts` view
   migration is applied, then each `performance_datasets` row is queryable via the
-  `artifacts` view with `data_type='performance'` (and its files via
-  `artifact_files`), while the source tables are read **in place** and unchanged.
-  *(FR-005, FR-006)*
+  `artifacts` list view with `data_type='performance'` (its files remain served
+  by the existing per-source detail endpoint), while the source tables are read
+  **in place** and unchanged. *(FR-005, FR-006)*
 - **AC-008.** Given Phase 2 moves no data, when the view migration is applied,
   then no `performance_datasets` / `performance_dataset_files` / `raw_data` row is
   altered or removed and no pre-migration snapshot is required (the existing

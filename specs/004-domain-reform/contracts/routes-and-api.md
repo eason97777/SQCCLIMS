@@ -61,9 +61,20 @@ Endpoints keep their method + path; the **behavior** shifts as noted.
 | POST | `/api/parsed-data/{id}/visualize` | visualize from `parsed_records` | **unchanged** — still `parsed_records` (FR-007 deferred) | — |
 | GET | `/api/performance-datasets` | list performance datasets | **unchanged & live** (reads the retained tables); deprecated in the UI only — the Artifacts page lists performance via the `artifacts` view | 2 |
 | POST | `/api/performance-datasets` | create performance dataset (multipart) | **unchanged & live**, but **deprecated**: new uploads go through the Artifact store (`POST /api/raw-data`, `data_type='performance'`) instead | 2 |
-| GET | `/api/performance-datasets/{id}/files` | list dataset files | **unchanged & live** (files also surface via the `artifact_files` view) | 2 |
+| GET | `/api/performance-datasets/{id}/files` | list dataset files | **unchanged & live** — performance-origin artifact detail/files stay on this endpoint (no cross-source file view) | 2 |
 | DELETE | `/api/performance-datasets/{id}` | Strong-tier delete | **unchanged** — performance-origin artifacts delete here; raw_data-origin via `/api/raw-data` (the Artifacts UI routes by `source`) | 2 |
 | GET | `/api/processing-jobs` | list parse/visualization job log | unchanged; **presented as "parse / visualization job log"** in copy | 0 |
+
+### Unified Artifacts list — list-only, detail per-source
+
+The `artifacts` **view** (Phase 2) backs the unified Artifacts **list** query
+(`GET /api/raw-data`, repointed `FROM artifacts`) — each row carries a `source`
+(`raw_data` / `performance`) + `source_row_id`. Artifact **detail, file listing,
+download, and delete stay on the existing per-source endpoints** unchanged; the
+frontend routes a row's detail/actions to `/api/raw-data/...` or
+`/api/performance-datasets/...` by `source`. No new artifact endpoints, no
+`handler.py` change, and no cross-source file view. Rationale and trade-off in
+[`../plan.md`](../plan.md) (Risks) and [`../data-model.md`](../data-model.md).
 
 ### Redirect / back-compat notes
 
