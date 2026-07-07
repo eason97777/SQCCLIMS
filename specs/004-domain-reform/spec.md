@@ -38,8 +38,12 @@ with **two orthogonal axes** instead of a flat block list:
   **Artifacts** (files, discriminated by `type`) and **Measurements** (numeric
   points about a sample, discriminated by `source`: `parsed` vs `manual`).
 - **Axis B — Transforms:** capabilities that *operate across* measurements —
-  `parse` (file → measurements), `visualize` (measurements → charts),
-  `analyze`/`process` (measurements → stats/QC/normalize).
+  `parse` (file → measurements), `analyze`/`process` (measurements →
+  stats/QC/normalize), and `visualize` (measurements → charts). *Note:* only
+  `analyze`/`process` is repointed onto the unified Measurements read model by
+  this reform. `visualize` keeps sourcing `parsed_records` (its charts need
+  per-record layout columns the scalar read model omits) — see the deferred
+  FR-007.
 
 The north-star rationale is captured in the companion review
 [`docs/DOMAIN_MODEL.md`](../../docs/DOMAIN_MODEL.md); this spec is its
@@ -105,16 +109,25 @@ measurements **with no data migration**.
 - **FR-004.** The Analysis/Processing transform (stats / QC / normalize) MUST
   read from the unified Measurements read model, so its results reflect **both**
   manual and parsed measurements, not `test_data` alone. *(US-2; Phase 1)*
-- **FR-005.** Performance datasets MUST be represented as **Artifacts** of type
+- **FR-005.** Performance datasets MUST be presented as **Artifacts** of type
   `data_type='performance'` under the general Artifact store (files-only, no
-  parser), rather than as a separate top-level entity. *(US-3; Phase 2)*
-- **FR-006.** The reform MUST migrate existing performance rows into the Artifact
-  store via a **forward-only, additive** migration (`INSERT…SELECT`) that copies
-  rather than mutates, and MUST NOT delete the original performance tables until
-  the copy is verified. *(US-3, US-6; Phase 2)*
-- **FR-007.** The Visualization transform MUST be able to operate over the
-  unified Measurements read model (both sources), not only over `parsed_records`.
-  *(US-2; Phase 3)*
+  parser), rather than as a separate top-level entity. This is realized via an
+  additive **`artifacts` read model** (a view over `raw_data` ∪
+  `performance_datasets`, mirroring the Phase 1 Measurements view), not by moving
+  rows; new performance uploads are reframed to write `raw_data`
+  (`data_type='performance'`) going forward. *(US-3; Phase 2)*
+- **FR-006.** Surfacing performance rows as Artifacts MUST be **forward-only and
+  non-destructive**: the `artifacts` / `artifact_files` views read the existing
+  `performance_datasets` / `performance_dataset_files` tables **in place** — no
+  rows or files are copied, moved, or mutated, and the source tables are
+  retained. *(US-3, US-6; Phase 2)*
+- **FR-007.** *(Deferred — out of scope for this reform.)* Extending the
+  Visualization transform to source the unified Measurements read model is
+  **deferred**: its charts (resistance heatmap, CD violin) require per-record
+  layout columns (`die_id` / `area` / `row_index` / `col_index` / `x_value` /
+  `y_value`) that the scalar `measurements` view deliberately omits.
+  Visualization remains sourced from `parsed_records`; revisit only if the read
+  model is later extended with layout columns. *(US-2; deferred)*
 - **FR-008.** All legacy top-level routes (`/raw-data`, `/test-data`,
   `/performance-datasets`, `/processing`, and the existing `/data`,
   `/performance` aliases) MUST continue to resolve — as redirects or aliases to
@@ -137,19 +150,22 @@ measurements **with no data migration**.
 ## Non-Functional Requirements
 
 - **NFR-001. Non-destructive & backward-compatible.** No phase may delete or
-  rewrite existing rows to introduce the new model. The performance fold copies
-  data (`INSERT…SELECT`) and retains the source tables until verified
-  (Article IV). Old routes are kept as redirects (Article V spirit: additive,
-  reversible where possible).
-- **NFR-002. Backup precedes destruction.** The only phase that moves data
-  (Phase 2, performance fold) MUST take a DB snapshot before the migration and
-  before any later cleanup of the deprecated tables, per constitution Article IV.
+  rewrite existing rows to introduce the new model. **Both** unifications
+  (Measurements, Phase 1; Artifacts, Phase 2) are **read-model views** over the
+  existing tables — no rows or files are copied, moved, or mutated. Old routes
+  are kept as redirects (Article V spirit: additive, reversible where possible).
+- **NFR-002. Backup precedes destruction.** No phase in this reform moves or
+  deletes data — both unifications are additive views — so **no pre-migration
+  snapshot is required here**. The existing startup snapshot and the per-delete
+  `backup_database()` on the existing performance / raw_data delete paths remain
+  the Article IV guarantees. Any *later* cleanup that physically removes the
+  deprecated performance tables MUST take its own snapshot first (out of scope).
 - **NFR-003. Smoke-green per phase.** Every phase MUST run `tests/smoke_test.py`
   as its green-light oracle, extending it to cover the new/changed behavior
   (Article IX).
 - **NFR-004. No new runtime dependencies.** The reform MUST be implementable with
   the stdlib-only backend core and the existing frontend footprint; the
-  `measurements` view, the fold migration, and route redirects add **no**
+  `measurements` and `artifacts` views and the frontend redirects add **no**
   third-party dependency (Article I).
 - **NFR-005. Auth posture unchanged.** The reform MUST preserve the existing
   optional-but-real auth behavior; relabelled/redirected routes keep the same
@@ -170,9 +186,10 @@ measurements **with no data migration**.
   `sample_uid`).
 - **Artifact** *(Axis A, kind 1)* — a set of files attached to a sample,
   discriminated by a `type`. Conceptually unifies today's `raw_data` (with its
-  files and optional parse pipeline) and, after Phase 2, performance datasets as
-  type `performance` (files-only). Characterization is a *related but separate*
-  file store, explicitly **not** folded in this reform.
+  files and optional parse pipeline) and, via the Phase 2 `artifacts` read model,
+  performance datasets surfaced as type `performance` (files-only, read in place
+  from `performance_datasets`). Characterization is a *related but separate* file
+  store, explicitly **not** folded in this reform.
 - **Measurement** *(Axis A, kind 2)* — one numeric point about a sample, with a
   metric name, value, unit, timestamp, and a `source` discriminator: `manual`
   (typed via the Measurements/测试结果 screen, today's `test_data`) or `parsed`
@@ -180,9 +197,11 @@ measurements **with no data migration**.
   as a **read model** (a view) over the two existing stores.
 - **Transform** *(Axis B, conceptual capability)* — an operation over
   measurements/artifacts: `parse` (Artifact file → parsed Measurements),
-  `visualize` (Measurements → charts), `analyze`/`process` (Measurements →
-  stats/QC/normalize). Transforms are *capabilities available across
-  measurements*, not storage.
+  `analyze`/`process` (Measurements → stats/QC/normalize), and `visualize`
+  (Measurements → charts). Transforms are *capabilities available across
+  measurements*, not storage. In this reform only `analyze`/`process` is
+  repointed onto the unified read model; `visualize` continues to source
+  `parsed_records` (FR-007 deferred).
 
 ## Out of Scope
 
@@ -194,6 +213,13 @@ measurements **with no data migration**.
   **read model** (a SQL view). Physically consolidating `test_data` +
   `parsed_records` into one table is a later, optional step and is **out of
   scope** here.
+- **A physical performance → `raw_data` consolidation.** Phase 2 surfaces
+  performance as Artifacts through the `artifacts` read model only. Physically
+  copying performance rows/files into `raw_data` / `raw_data_files` (and later
+  dropping the source tables) is a separate, deferred cleanup — **out of scope**
+  here.
+- **Visualization over the Measurements read model.** Deferred (FR-007);
+  Visualization stays sourced from `parsed_records` in this reform.
 - **Auth / RBAC changes.** The reform preserves existing auth behavior and
   introduces no new roles or gates.
 - **Parser or visualization *algorithm* changes.** Only the *source* the
@@ -201,9 +227,9 @@ measurements **with no data migration**.
   untouched.
 - **MES / `process_records` restructuring.** The traveller is only *renamed for
   disambiguation* (FR-009); its data model is unchanged.
-- **Deleting the deprecated performance tables.** Phase 2 copies and keeps them;
-  their eventual removal is a separate, later, approved cleanup — not part of
-  this reform's committed scope.
+- **Deleting the deprecated performance tables.** Phase 2 reads them in place and
+  keeps them; their eventual removal is a separate, later, approved cleanup — not
+  part of this reform's committed scope.
 
 ## Resolved Clarifications
 
@@ -233,13 +259,17 @@ measurements **with no data migration**.
   `extra_json`, e.g. CD/SEM `unit: nm`); richer unit derivation from `extra_json`
   is **deferred** to keep the view a pure, index-friendly SQL projection. This
   matches [`data-model.md`](./data-model.md).
-- **RC-4 — Performance upload UI: redirect + reframe.** After the Phase 2 fold,
-  the standalone `/performance-datasets` route **redirects**, and uploading
-  performance files is **reframed as a normal Artifact upload**
-  (`data_type='performance'`) in the unified Artifacts area. The performance API
-  endpoints are deprecated (kept as back-compat shims / redirects), not deleted,
-  in this reform. See [`contracts/routes-and-api.md`](./contracts/routes-and-api.md)
-  and **FR-005** / **FR-008**.
+- **RC-4 — Performance upload UI: reframe + frontend redirect.** After Phase 2,
+  the standalone `/performance-datasets` **frontend** route **redirects** (a
+  client-side router redirect — the same pattern the router already uses for the
+  `/data` and `/performance` aliases), and uploading performance files is
+  **reframed as a normal Artifact upload** (`data_type='performance'`) in the
+  unified Artifacts area. The performance **API** endpoints stay **live and
+  unchanged** (they read the retained `performance_datasets` tables) — no
+  backend redirect or shim is introduced by this reform; their eventual hard
+  removal is a separate, later, approved cleanup. See
+  [`contracts/routes-and-api.md`](./contracts/routes-and-api.md) and **FR-005** /
+  **FR-008**.
 
 ## Acceptance Criteria
 
@@ -269,22 +299,28 @@ measurements **with no data migration**.
   smoke test (extended to cover the view-backed Analysis) is green.
   *(FR-011, FR-012, Article IX)*
 
-**Phase 2 — artifacts fold:**
-- **AC-007.** Given performance datasets exist, when the fold migration is
-  applied, then each `performance_datasets` row appears in `raw_data` with
-  `data_type='performance'` and each `performance_dataset_files` row appears in
-  `raw_data_files`, while the original performance tables are **retained**.
+**Phase 2 — artifacts read model:**
+- **AC-007.** Given performance datasets exist, when the `artifacts` view
+  migration is applied, then each `performance_datasets` row is queryable via the
+  `artifacts` view with `data_type='performance'` (and its files via
+  `artifact_files`), while the source tables are read **in place** and unchanged.
   *(FR-005, FR-006)*
-- **AC-008.** Given a DB snapshot was taken before the fold, when the migration
-  runs, then a recoverable checkpoint exists per Article IV. *(NFR-002)*
+- **AC-008.** Given Phase 2 moves no data, when the view migration is applied,
+  then no `performance_datasets` / `performance_dataset_files` / `raw_data` row is
+  altered or removed and no pre-migration snapshot is required (the existing
+  startup + per-delete backups remain the Article IV guarantee). *(NFR-001, NFR-002)*
 - **AC-009.** Given a user visits `/performance-datasets`, when the page loads,
-  then it resolves via a redirect/alias and does not 404. *(FR-008)*
+  then the frontend router resolves it via a client-side redirect/alias and does
+  not 404. *(FR-008)*
 
-**Phase 3 — transforms unification:**
-- **AC-010.** Given the Visualization transform, when it runs, then it can source
-  measurements from the `measurements` view (both sources). *(FR-007)*
+**Phase 3 — transforms unification (nav only):**
+- **AC-010.** *(Deferred with FR-007.)* Visualization-over-the-read-model is out
+  of scope; Visualization continues to source `parsed_records` and its behavior
+  is unchanged by this reform. *(FR-007 — deferred)*
 - **AC-011.** Given the nav "Analysis" area, when the operator opens it, then
-  Visualization and Analyze/Process are presented as transforms over
-  Measurements, and legacy `/processing` resolves via redirect. *(FR-001, FR-008)*
-- **AC-012.** The smoke test MUST cover the view-backed Analysis, the folded
-  performance artifact path, and each legacy-route redirect. *(Article IX)*
+  Analyze/Process (and Visualization, as a navigational grouping only) are
+  presented as transforms over Measurements, and legacy `/processing` resolves
+  via a frontend redirect. *(FR-001, FR-008)*
+- **AC-012.** The smoke test MUST cover the view-backed Analysis, the
+  `artifacts`-view performance path, and each legacy frontend-route redirect.
+  *(Article IX)*

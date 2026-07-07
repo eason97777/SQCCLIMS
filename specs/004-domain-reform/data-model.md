@@ -14,9 +14,10 @@
 | Phase | Object | Kind | Destructive? |
 |-------|--------|------|--------------|
 | 1 | `measurements` view | new SQL VIEW (read model) | No — additive, read-only |
-| 2 | rows in `raw_data` / `raw_data_files` | data copy (`INSERT…SELECT`) | No — copies; source retained |
-| — | `test_data`, `parsed_records` | kept as-is (view reads them) | No |
-| — | `performance_datasets`, `performance_dataset_files` | kept until verified, then later cleanup (out of scope) | No |
+| 2 | `artifacts` / `artifact_files` views | new SQL VIEWs (read model) | No — additive, read-only |
+| — | `test_data`, `parsed_records` | kept as-is (measurements view reads them) | No |
+| — | `raw_data`, `raw_data_files` | kept as-is (artifacts views read them) | No |
+| — | `performance_datasets`, `performance_dataset_files` | kept as-is (artifacts views read them); physical consolidation out of scope | No |
 
 ---
 
@@ -121,81 +122,103 @@ Notes:
 **Consumer change (Phase 1, feature layer — not schema):**
 `app/features/processing.py :: fetch_processing_source()` changes its `FROM
 test_data td JOIN samples s` to source rows from `measurements` (joined to
-`samples` for the display columns `run_qc`/`run_normalize` emit). The output
-column names (`metric_name`, `unit`, `numeric_value`, `sample_*`) are preserved
-so `run_stats`/`run_qc`/`run_normalize` are unchanged.
+`samples` for the display columns `run_qc`/`run_normalize` emit). `run_stats` is
+unchanged (it reads `metric_name`/`unit`/`numeric_value`). **`run_qc` and
+`run_normalize` today emit `row["id"]`** — but the view exposes `source_row_id`
++ `source` rather than a bare `id` (because `test_data.id` and `parsed_records.id`
+overlap and would be ambiguous once unioned), so those two functions must emit
+`source` + `source_row_id` instead. The frontend `ProcessingResultViewer`
+ignores that field today (it renders `metric_name`/`value`/sample columns), so
+the change is consumer-invisible; the added `source` is reflected in the
+`/api/process` contract.
 
 ---
 
-## Phase 2 — Performance fold into `raw_data` / `raw_data_files`
+## Phase 2 — The `artifacts` read model (SQL VIEWs)
 
-**Purpose.** Make performance datasets ordinary **Artifacts** of type
+**Purpose.** Present performance datasets as ordinary **Artifacts** of type
 `performance` (files-only, no parser), so "attach files to a sample" is one
-concept. Forward-only `INSERT…SELECT`; source tables retained until verified.
+concept — **without moving data**. Mirrors Phase 1: an `artifacts` VIEW over
+`raw_data` ∪ `performance_datasets`, and an `artifact_files` VIEW over
+`raw_data_files` ∪ `performance_dataset_files`. Additive, read-only; the source
+tables are read in place. New performance uploads are reframed to write
+`raw_data` (`data_type='performance'`) going forward; a physical consolidation
+of the legacy performance rows is out of scope.
 
-### `performance_datasets` → `raw_data` (`data_type='performance'`)
+**Identity.** `raw_data.id` and `performance_datasets.id` overlap, so the view
+carries `source` (`'raw_data'` / `'performance'`) + `source_row_id`. Reads,
+links, and deletes MUST key off `(source, source_row_id)` — a performance-origin
+artifact is created/deleted against `performance_datasets`, a raw_data-origin one
+against `raw_data`.
 
-| `raw_data` column | Source / value | Notes |
-|-------------------|----------------|-------|
-| `sample_id` | `pd.sample_id` | clean map |
-| `sample_uid` | `s.sample_uid` (join `samples`) | `performance_datasets` stores no uid |
-| `sample_display_code` | `s.sample_display_code` (join `samples`) | ditto |
-| `raw_data_code` | **synthesized** — e.g. `'RD-' || s.sample_uid || '-PERFORMANCE-' || <yyyymmdd from pd.collected_at/created_at> || '-' || printf('%03d', row_seq)` | `raw_data_code` is `UNIQUE NOT NULL`; performance has no code. Must be deterministic + collision-free (see risk). |
-| `raw_data_name` | `pd.dataset_name` | `NOT NULL`; `dataset_name` is `NOT NULL` — clean |
-| `data_type` | literal `'performance'` | the artifact-type marker |
-| `data_category` | literal `'performance'` (or `'other'`) | `raw_data` has `data_category`; performance has no analogue. `RAW_DATA_TYPES` would gain a `performance` entry (config, files-only, no parser) |
-| `source_type` | `pd.data_format` or `''` | best-fit |
-| `instrument` | `''` | performance has no instrument column |
-| `operator` | `pd.operator` | clean |
-| `measured_at` | `pd.collected_at` | clean |
-| `parser_status` | literal `'not_parsed'` | performance is files-only; **never parsed** |
-| `status` | `pd.status` (or literal `'imported'`) | `pd.status` default is `待处理`; map to `'imported'` to match `raw_data` conventions |
-| `file_count` | `pd.file_count` | clean |
-| `total_size` | `pd.total_bytes` | **column rename**: `total_bytes` → `total_size` |
-| `storage_path` | `pd.storage_dir` | **column rename**: `storage_dir` → `storage_path` |
-| `metadata_json` | **JSON blob** preserving `aliquot_code`, `test_type`, `data_format`, `source_folder_name` | these have **no `raw_data` home**; preserve them here so nothing is lost |
-| `notes` | `pd.notes` | clean |
-| `created_at` | `pd.created_at` | clean |
-| `updated_at` | `pd.created_at` | `performance_datasets` has **no `updated_at`**; seed from `created_at` |
+### `artifacts` view — `raw_data` branch (identity map) ∪ `performance_datasets` branch
 
-**Columns that do NOT map cleanly (must be preserved in `metadata_json`):**
-`aliquot_code`, `test_type`, `data_format`, `source_folder_name`. There is no
-lossless `raw_data` column for these; the migration must fold them into
-`metadata_json` rather than drop them (Article IV spirit — no silent loss).
+The `raw_data` branch projects its own columns 1:1 (`source='raw_data'`,
+`source_row_id=rd.id`). The `performance_datasets` branch maps into the same
+shape:
 
-### `performance_dataset_files` → `raw_data_files`
+| `artifacts` column | `raw_data` branch | `performance_datasets` branch | Note |
+|--------------------|-------------------|-------------------------------|------|
+| `source` | `'raw_data'` | `'performance'` | discriminator |
+| `source_row_id` | `rd.id` | `pd.id` | row identity within its source |
+| `sample_id` | `rd.sample_id` | `pd.sample_id` | |
+| `sample_uid` | `rd.sample_uid` | `s.sample_uid` (join `samples`) | `performance_datasets` stores no uid |
+| `sample_display_code` | `rd.sample_display_code` | `s.sample_display_code` (join `samples`) | ditto |
+| `artifact_code` | `rd.raw_data_code` | **derived** — e.g. `'PERF-' || pd.id` (a stable display label; not a `raw_data` insert, so no `UNIQUE NOT NULL` constraint applies) | performance has no code; the view only needs a readable label |
+| `artifact_name` | `rd.raw_data_name` | `pd.dataset_name` | |
+| `data_type` | `rd.data_type` | literal `'performance'` | the artifact-type marker |
+| `data_category` | `rd.data_category` | literal `'performance'` | `RAW_DATA_TYPES` gains a `performance` entry (config, files-only, no parser) so new uploads categorize |
+| `source_type` | `rd.source_type` | `pd.data_format` | best-fit |
+| `instrument` | `rd.instrument` | `''` | performance has no instrument column |
+| `operator` | `rd.operator` | `pd.operator` | |
+| `measured_at` | `rd.measured_at` | `pd.collected_at` | **rename** |
+| `parser_status` | `rd.parser_status` | literal `'not_parsed'` | performance is files-only; **never parsed** |
+| `status` | `rd.status` | `pd.status` | |
+| `file_count` | `rd.file_count` | `pd.file_count` | |
+| `total_size` | `rd.total_size` | `pd.total_bytes` | **rename**: `total_bytes` → `total_size` |
+| `storage_path` | `rd.storage_path` | `pd.storage_dir` | **rename**: `storage_dir` → `storage_path` |
+| `metadata_json` | `rd.metadata_json` | **JSON expression** folding `aliquot_code` / `test_type` / `data_format` / `source_folder_name` | these have **no `raw_data` home**; surface them here so nothing is hidden |
+| `notes` | `rd.notes` | `pd.notes` | |
+| `created_at` | `rd.created_at` | `pd.created_at` | |
+| `updated_at` | `rd.updated_at` | `pd.created_at` | `performance_datasets` has **no `updated_at`**; use `created_at` |
 
-| `raw_data_files` column | Source / value | Notes |
-|-------------------------|----------------|-------|
-| `raw_data_id` | the new `raw_data.id` for the parent dataset | requires a join/lookup mapping old `dataset_id` → new `raw_data.id` |
-| `original_filename` | `pdf.original_filename` | clean |
-| `stored_filename` | `pdf.stored_filename` | clean |
-| `relative_path` | `pdf.relative_path` | clean |
-| `file_path` | `pdf.storage_path` | **column rename**: `storage_path` → `file_path` |
-| `file_ext` | derived from `original_filename` suffix, else `''` | `performance_dataset_files` has **no `file_ext`** |
-| `mime_type` | `pdf.mime_type` | clean |
-| `file_size` | `pdf.file_size` | clean |
-| `sha256` | `''` | `performance_dataset_files` has **no `sha256`**; default empty (archive at upload already covered originals) |
-| `file_role` | literal `'raw'` | default matches `raw_data_files` default |
-| `preview_supported` | `0` (or derive via `preview_type_for_file`) | no such column in source; default 0 |
-| `created_at` | `pdf.created_at` | clean |
+> The `metadata_json` fold for the performance branch is a pure, code-authored
+> SQL expression (e.g. `json_object('aliquot_code', pd.aliquot_code, …)` or a
+> fixed string concat) — no request data (Article VII).
 
-**Mapping the parent id.** `performance_dataset_files.dataset_id` references the
-old `performance_datasets.id`; the fold must translate that to the *new*
-`raw_data.id`. Options (decide at implementation): (a) fold datasets first while
-recording a `dataset_id → raw_data_id` map (e.g. via the synthesized
-`raw_data_code` as a stable join key), then fold files joining on that; or
-(b) a single migration that stores the old `dataset_id` in `raw_data.metadata_json`
-to bridge the join. Option (a) is preferred for clarity.
+### `artifact_files` view — `raw_data_files` branch ∪ `performance_dataset_files` branch
+
+| `artifact_files` column | `raw_data_files` branch | `performance_dataset_files` branch | Note |
+|-------------------------|-------------------------|------------------------------------|------|
+| `source` | `'raw_data'` | `'performance'` | discriminator |
+| `source_row_id` | `rdf.id` | `pdf.id` | |
+| `parent_source_row_id` | `rdf.raw_data_id` | `pdf.dataset_id` | id of the owning artifact **within the same `source`** |
+| `original_filename` | `rdf.original_filename` | `pdf.original_filename` | |
+| `stored_filename` | `rdf.stored_filename` | `pdf.stored_filename` | |
+| `relative_path` | `rdf.relative_path` | `pdf.relative_path` | |
+| `file_path` | `rdf.file_path` | `pdf.storage_path` | **rename**: `storage_path` → `file_path` |
+| `file_ext` | `rdf.file_ext` | derived from `original_filename` suffix, else `''` | `performance_dataset_files` has **no `file_ext`** |
+| `mime_type` | `rdf.mime_type` | `pdf.mime_type` | |
+| `file_size` | `rdf.file_size` | `pdf.file_size` | |
+| `sha256` | `rdf.sha256` | `''` | `performance_dataset_files` has **no `sha256`**; default empty (the upload archive already keyed originals by hash) |
+| `file_role` | `rdf.file_role` | literal `'raw'` | matches `raw_data_files` default |
+| `preview_supported` | `rdf.preview_supported` | `0` | no such column in source; default 0 |
+| `created_at` | `rdf.created_at` | `pdf.created_at` | |
+
+**Joining files to their artifact.** Because the parent id is only unique *within
+a source*, a file is matched to its artifact on `(source, parent_source_row_id)`
+= `(source, source_row_id)` — never on `source_row_id` alone.
 
 ### Deletion / data-safety (Article IV)
 
-Folded performance artifacts become ordinary `raw_data` rows and inherit
-`raw_data`'s existing **Strong-tier** deletion: `delete_raw_data()` already calls
-`backup_database()`, cascades `raw_data_files` via `ON DELETE CASCADE`, and
-records `deletion_audit`. No new deletable-entity semantics are introduced. The
-pre-existing `performance_datasets` row in `docs/Data_Flow.md` remains valid
-until those source tables are removed in a later, separately-approved cleanup.
+**Nothing is copied**, so a physical file is still referenced by exactly one
+row/owner, exactly as today. Deletes route by `source`: a raw_data-origin
+artifact deletes via `delete_raw_data()` (`backup_database()` + `ON DELETE
+CASCADE` on `raw_data_files` + `deletion_audit`); a performance-origin artifact
+deletes via the existing `delete_performance_dataset()` path (same guarantees).
+No new deletable-entity semantics are introduced, and there is no shared-file /
+double-delete hazard. The existing `performance_datasets` / `raw_data` rows in
+`docs/Data_Flow.md` remain valid unchanged.
 
 ---
 
@@ -205,21 +228,22 @@ until those source tables are removed in a later, separately-approved cleanup.
 |----------------|--------------------------|
 | `test_data` | **Kept, read-write.** Manual measurements still write here; the view reads it. |
 | `parsed_records` | **Kept, read-write.** Parser still writes here; the view reads it. |
-| `measurements` (view) | **New, read-only.** The unified read model. |
-| `raw_data` / `raw_data_files` | **Kept, extended** to host `data_type='performance'` artifacts. |
-| `performance_datasets` / `performance_dataset_files` | **Deprecated but retained** after Phase 2 (read-only in practice once the create path is reframed). Physical removal is out of scope. |
+| `measurements` (view) | **New, read-only.** The unified measurement read model. |
+| `artifacts` / `artifact_files` (views) | **New, read-only.** The unified artifact read model. |
+| `raw_data` / `raw_data_files` | **Kept, read-write.** Uploads still write here; the `artifacts` views read them. New performance uploads write here as `data_type='performance'`. |
+| `performance_datasets` / `performance_dataset_files` | **Kept, read (write path reframed).** The `artifacts` views read them in place; the standalone API stays live over them. Physical removal is out of scope. |
 | `characterization_*` | **Unchanged.** Fold explicitly deferred. |
 | `processing_jobs` | **Unchanged.** Renamed *in copy only* to "parse / visualization job log". |
 | `processing_results` | **Unchanged.** Analysis output. |
 | `process_records` | **Unchanged.** MES / 工艺记录 traveller. |
-| Physical unified `measurements` table | **Not built.** Out of scope; the view is the deliverable. |
+| Physical unified `measurements` / `artifacts` tables | **Not built.** Out of scope; the views are the deliverable. |
 
 ## Per-phase migration approach (all forward-only)
 
 1. **Phase 1:** `migrations/NNN_measurements_view.sql` — one `CREATE VIEW`.
-2. **Phase 2:** `migrations/NNN_fold_performance_into_raw_data.sql` — the two
-   `INSERT…SELECT` blocks above, preceded operationally by a DB backup; source
-   tables retained.
+2. **Phase 2:** `migrations/NNN_artifacts_view.sql` — two `CREATE VIEW` blocks
+   (`artifacts`, `artifact_files`). Additive, read-only; no data moves, so no
+   pre-migration backup is required.
 3. **Phase 0 & 3:** no schema; frontend/docs/feature-source changes only.
 
 No applied migration is ever edited; each new file carries a monotonic numeric

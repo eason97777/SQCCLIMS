@@ -24,25 +24,27 @@
 
 | Article | Verdict | Notes |
 |---------|---------|-------|
-| I — Standard-library backend core, one sanctioned dependency boundary | **PASS** | The `measurements` view, the performance-fold `INSERT…SELECT`, and route redirects are all pure `sqlite3` + `http.server`. No third-party import enters `app/**` or `server.py`. Visualization keeps its existing matplotlib use confined to `parsers/`; this reform does not add any dependency. |
-| II — Layered architecture, one-way dependencies | **PASS** | Reading the view is done inside feature modules (`processing.py`, `visualization.py`); `handler.py` only gains redirect/alias dispatch entries (transport concern). No infra module imports a feature; no new cycles. |
-| III — One feature owns its domain | **PASS (with justification)** | The reform *consolidates* how features are grouped in the UI, but the backend keeps one module per domain (`raw_data`, `test_data`, `processing`, `visualization`, `parsing`). Performance folds **into** `raw_data`'s store — that is improved domain cohesion (one Artifact owner), **not** spreading a feature across modules. The `measurements` view is shared read infrastructure consumed by existing feature modules, not a new competing owner. See "Article III note" below. |
-| IV — Data safety is non-negotiable | **PASS** | Only Phase 2 moves data; it takes a DB snapshot before the fold (as `performance` delete already does via `backup_database()`), copies with `INSERT…SELECT`, and **keeps the source tables until verified**. The view (Phase 1) touches no rows. No new deletable entity is introduced by the view; folded performance artifacts inherit `raw_data`'s existing Strong-tier deletion + `ON DELETE CASCADE` + archive/audit path. |
-| V — Forward-only, checksum-guarded migrations | **PASS** | Every schema change is a **new** `migrations/NNN_*.sql`: the view is one migration; the performance fold is another (`INSERT…SELECT`). No applied file is edited; `init_db()` baseline is untouched. Migration SQL contains no `BEGIN`/`COMMIT`. |
+| I — Standard-library backend core, one sanctioned dependency boundary | **PASS** | The `measurements` and `artifacts` views are pure `sqlite3`; the legacy-route redirects are frontend-only (React Router). No third-party import enters `app/**` or `server.py`. Visualization keeps its existing matplotlib use confined to `parsers/`; this reform does not add any dependency. |
+| II — Layered architecture, one-way dependencies | **PASS** | The views are read inside feature modules (`processing.py` for `measurements`; `raw_data.py` / `performance.py` for `artifacts`); `handler.py` gains no new logic (legacy-route redirects are frontend-only). No infra module imports a feature; no new cycles. |
+| III — One feature owns its domain | **PASS (with justification)** | The reform *consolidates* how features are grouped in the UI, but the backend keeps one module per domain (`raw_data`, `test_data`, `processing`, `performance`, `parsing`). Performance is *surfaced* alongside `raw_data` via the shared `artifacts` read model — its own module still owns writes/deletes — so this is improved UI cohesion, **not** spreading a feature across modules. The `measurements` and `artifacts` views are shared read infrastructure consumed by existing feature modules, not new competing owners. See "Article III note" below. |
+| IV — Data safety is non-negotiable | **PASS** | **No phase moves or deletes data** — both Measurements (Phase 1) and Artifacts (Phase 2) are additive read-model views over existing tables, so no pre-migration snapshot is needed. No new deletable entity is introduced: performance-origin artifacts keep deleting via the existing `delete_performance_dataset` path, raw_data-origin via `delete_raw_data` (both already do `backup_database()` + `ON DELETE CASCADE` + `deletion_audit`). Because nothing is copied, there is **no shared-file / double-delete hazard**. |
+| V — Forward-only, checksum-guarded migrations | **PASS** | Every schema change is a **new** `migrations/NNN_*.sql`, and each is a single additive `CREATE VIEW` (the `measurements` view in Phase 1; the `artifacts` / `artifact_files` views in Phase 2). No applied file is edited; `init_db()` baseline is untouched. Migration SQL contains no `BEGIN`/`COMMIT`. |
 | VI — Errors via the exception convention | **PASS** | No new hand-built status codes. Feature code reading the view continues to raise `ValueError` / `LookupError`; redirects are transport-level and do not bypass the central mapping. |
 | VII — Parameterized SQL only | **PASS** | The view definition uses only fixed, code-authored column lists — including the parsed-row `metric_name` `CASE` derivation (per-`data_type` composition of `side`/`direction`/`row_group`) — with **no request data** interpolated. Feature queries against the view continue to use `?`/named parameters exactly as today. |
-| VIII — Runtime config read at call time | **PASS** | No path binding changes; any new code reads `config.<NAME>` at call time. The fold migration references no runtime path (pure SQL). |
-| IX — The smoke test is the green-light oracle | **PASS** | Each phase records a baseline `python3 tests/smoke_test.py`, then extends it: Phase 1 asserts view-backed Analysis sees both sources; Phase 2 asserts the folded performance artifact is queryable and old routes redirect; Phase 3 asserts visualization-over-view and the Analysis nav. |
-| X — Simplicity over cleverness | **PASS (honest transitional cost)** | The end state is *simpler* (one Measurements concept, one Artifact concept). Transitionally the system carries a dual-read (view UNION over two tables) and, in Phase 2, two copies of performance data until verified. This is real added complexity, deliberately **bounded by phasing** and removed as each phase lands. We do **not** build the physical unified table speculatively (deferred). |
+| VIII — Runtime config read at call time | **PASS** | No path binding changes; any new code reads `config.<NAME>` at call time. The view migrations reference no runtime path (pure SQL). |
+| IX — The smoke test is the green-light oracle | **PASS** | Each phase records a baseline `python3 tests/smoke_test.py`, then extends it: Phase 1 asserts view-backed Analysis sees both sources; Phase 2 asserts performance is queryable via the `artifacts` view and the frontend legacy route resolves; Phase 3 asserts the Analysis nav grouping and the `/processing` redirect. |
+| X — Simplicity over cleverness | **PASS (honest transitional cost)** | The end state is *simpler* (one Measurements concept, one Artifact concept). Transitionally the system carries a dual-read (each view UNIONs two tables) and, for Artifacts, delete/write must route to the correct backing table by `source`. This is real added complexity, deliberately **bounded by phasing**. We do **not** copy performance rows/files or build a physical unified table speculatively (both deferred), so there is no dual-store to reconcile. |
 | XI — Optional-but-real auth & RBAC | **PASS** | Relabelled and redirected routes preserve the existing `GET ≤ operator-write ≤ admin-delete` policy and remain a true no-op when auth is disabled. No auth code changes. |
 
 **Article III note (justification, not deviation).** Article III forbids a single
 *feature* being spread across multiple modules. This reform does the opposite: it
-*increases* cohesion by making `raw_data` the one owner of file Artifacts
-(absorbing performance) and by giving all transforms one shared read model. The
-`measurements` view is not a feature module — it is shared read infrastructure
-(like an index), consumed by the existing `processing`/`visualization` owners.
-No feature's logic is scattered. Recorded here so reviewers see it was considered.
+*increases* cohesion by presenting all file Artifacts (raw-data + performance)
+under one concept and all measurements under one concept. The two read models
+(`measurements`, `artifacts`) are **not** feature modules — they are shared read
+infrastructure (like an index), consumed by existing feature owners; the backing
+tables and their write/delete owners (`raw_data`, `performance`, `test_data`,
+`parsing`) are unchanged. No feature's logic is scattered. Recorded here so
+reviewers see it was considered.
 
 > No row is a DEVIATION. Two rows carry explicit justifications (III, X) that a
 > human reviewer must accept as part of approving this Draft.
@@ -51,16 +53,21 @@ No feature's logic is scattered. Recorded here so reviewers see it was considere
 
 - **Backend layer(s) touched:**
   - **Migrations** — one new file for the `measurements` view (Phase 1); one new
-    file for the performance→`raw_data` fold (Phase 2).
+    file for the `artifacts` / `artifact_files` views (Phase 2). Both additive
+    `CREATE VIEW`; no data moves.
   - **Feature modules** — `app/features/processing.py` (repoint its source query
-    from `test_data` to the `measurements` view); `app/features/visualization.py`
-    (allow sourcing from the view); `app/features/raw_data.py` /
-    `app/features/performance.py` (performance becomes an artifact type; the
-    standalone create path is redirected/reframed).
-  - **HTTP** — `app/http/handler.py` gains redirect/alias dispatch entries for
-    legacy routes; no business logic added.
-  - **db / validation / storage / deletion** — unchanged in shape; folded
-    performance artifacts reuse `raw_data`'s existing deletion path.
+    from `test_data` to the `measurements` view, and emit `source` +
+    `source_row_id` in QC/normalize output instead of the now-ambiguous `id`);
+    `app/features/raw_data.py` / `app/features/performance.py` (Artifact list/
+    detail read the `artifacts` view; the standalone performance create path is
+    reframed to write `raw_data` going forward). `visualization.py` is
+    **untouched** (FR-007 deferred).
+  - **HTTP** — `app/http/handler.py` is **unchanged** for routing; legacy-route
+    redirects are frontend-only (React Router). No business logic added.
+  - **db / validation / storage / deletion** — unchanged; performance-origin
+    artifacts keep their existing `delete_performance_dataset` path and
+    raw_data-origin their `delete_raw_data` path (routed by `source`). Nothing is
+    copied, so no shared-file cleanup change.
 - **Frontend area(s):**
   - `frontend/src/utils/constants.ts` — `NAV_ITEMS` + `VIEW_META` relabel and
     regroup (Phases 0/3).
@@ -82,10 +89,13 @@ No feature's logic is scattered. Recorded here so reviewers see it was considere
 - **Artifacts** = files attached to a sample, discriminated by `type`. `raw_data`
   already *is* the general Artifact store: it has `data_type`, a files child
   (`raw_data_files`), and an optional parse pipeline (`parsed_data` /
-  `parsed_records`). The reform makes this explicit and **folds
-  `performance_datasets`/`performance_dataset_files` into
-  `raw_data`/`raw_data_files` as `data_type='performance'`** (files-only, no
-  parser). Characterization stays a separate store (deferred).
+  `parsed_records`). The reform introduces an **`artifacts` read model first**: a
+  SQL VIEW `artifacts` (with a companion `artifact_files`) that UNIONs `raw_data`
+  and `performance_datasets` (mapped to `data_type='performance'`, files-only, no
+  parser), so performance shows up as an Artifact with **no data migration**.
+  New performance uploads are reframed to write `raw_data` going forward; a
+  physical consolidation is a later, optional step (out of scope). Characterization
+  stays a separate store (deferred).
 - **Measurements** = numeric points about a sample, discriminated by `source`.
   The reform introduces a **read model first**: a SQL VIEW `measurements` that
   UNIONs `test_data` (`source='manual'`) and `parsed_records`
@@ -96,15 +106,17 @@ No feature's logic is scattered. Recorded here so reviewers see it was considere
 
 **Axis B — Transforms as capabilities (apply across Measurements).**
 - `parse`: Artifact file → parsed Measurements (exists, unchanged).
-- `visualize`: Measurements → charts. Target: able to operate over the
-  `measurements` view (both sources), not only `parsed_records`.
-- `analyze`/`process`: Measurements → stats/QC/normalize. Target: read the
-  `measurements` view (both sources), not only `test_data`.
+- `analyze`/`process`: Measurements → stats/QC/normalize. Target (Phase 1): read
+  the `measurements` view (both sources), not only `test_data`.
+- `visualize`: Measurements → charts. **Deferred (FR-007)** — its charts need
+  per-record layout columns the scalar view omits, so it keeps sourcing
+  `parsed_records` in this reform.
 
 **Thin-handler contract preserved.** `handler.py` continues to parse/route/
 serialize only. The source-of-truth change (read `measurements` instead of
 `test_data`) happens inside `processing.py`'s `fetch_processing_source()`; the
-handler is unaware. Redirects are pure dispatch entries.
+handler is unaware. Legacy-route redirects live entirely in the frontend router,
+so `handler.py` needs no change at all.
 
 **Data flow (unchanged in shape) for Analysis after Phase 1:**
 `POST /api/process` → `run_processing()` → `fetch_processing_source(conn)`
@@ -145,58 +157,75 @@ Each phase is independently shippable, forward-only, and smoke-green.
   little view complexity but remains code-authored SQL with no request data
   (Article VII PASS).
 - Repoint `processing.py`'s `fetch_processing_source()` to `SELECT … FROM
-  measurements` so Analysis also sees parsed data. Keep the same output shape
-  (`metric_name`, `unit`, `numeric_value`, sample identity columns) so
-  `run_stats` / `run_qc` / `run_normalize` are unchanged.
+  measurements` so Analysis also sees parsed data. `run_stats` is unchanged
+  (reads `metric_name`/`unit`/`numeric_value`). `run_qc` and `run_normalize`
+  currently emit `row["id"]`, which the view does **not** expose (it exposes
+  `source_row_id` + `source`, because `test_data.id` and `parsed_records.id`
+  overlap); repoint those two to emit `source` + `source_row_id` instead. The
+  frontend `ProcessingResultViewer` ignores that field today, so this is
+  consumer-invisible; the added `source` also appears in the API contract.
 - Extend the smoke test: seed a sample with one manual `test_data` row and one
   parsed record; assert Analysis `source_count` covers both.
 - **Migration:** `migrations/NNN_measurements_view.sql` (view only).
 - **Back-compat:** the view is read-only and additive; `test_data` writes are
   untouched. **No data moves.**
 
-### Phase 2 — Artifacts fold
+### Phase 2 — Artifacts read model
 
-- Migrate `performance_datasets` → `raw_data` (`data_type='performance'`) and
-  `performance_dataset_files` → `raw_data_files` via a forward-only
-  `INSERT…SELECT` migration. Column mapping is in [`data-model.md`](./data-model.md).
-- **Backup first** (Article IV): a DB snapshot precedes the migration; the fold
-  **keeps the old performance tables** until the copy is verified (their removal
-  is a separate, later approved cleanup — not in this reform's committed scope).
-- Add old-route redirects (`/performance-datasets`, `/performance`,
-  `/api/performance-datasets…` behavior — see [`contracts/routes-and-api.md`](./contracts/routes-and-api.md)).
+- Add an `artifacts` VIEW (and a companion `artifact_files` VIEW) via a **new**
+  forward-only migration, mirroring Phase 1. `artifacts` UNIONs `raw_data` with
+  `performance_datasets` mapped to `raw_data`'s shape (`data_type='performance'`,
+  synthesized code, `total_bytes→total_size`, `storage_dir→storage_path`,
+  `collected_at→measured_at`, and `aliquot_code`/`test_type`/`data_format`/
+  `source_folder_name` folded into `metadata_json`); it carries `source` +
+  `source_row_id` (since `raw_data.id` and `performance_datasets.id` overlap).
+  Exact SQL and mappings in [`data-model.md`](./data-model.md). **No data moves.**
+- **No backup needed** (Article IV): the view reads the source tables in place;
+  nothing is copied, moved, or deleted, so no shared-file / double-delete hazard.
+- Point the Artifact list/detail reads at the `artifacts` / `artifact_files`
+  views; reframe the performance **create** path to write `raw_data`
+  (`data_type='performance'`) going forward. The existing performance API
+  endpoints stay live over the retained tables (see
+  [`contracts/routes-and-api.md`](./contracts/routes-and-api.md)); deletes route
+  by `source` to the existing owning delete path.
+- Legacy-route redirects (`/performance-datasets`, `/performance`) are
+  **frontend-only** (React Router), following the existing `/data`, `/performance`
+  alias precedent. No backend redirect.
 - Frontend shows performance as an artifact type under Raw Data / Artifacts.
-- **Migration:** `migrations/NNN_fold_performance_into_raw_data.sql`.
-- **Testing:** assert folded rows are queryable via `raw_data` with
-  `data_type='performance'`; assert `/performance-datasets` redirects; smoke-green.
+- **Migration:** `migrations/NNN_artifacts_view.sql`.
+- **Testing:** assert performance rows are queryable via the `artifacts` view
+  with `data_type='performance'`; assert `/performance-datasets` resolves via the
+  frontend redirect; smoke-green.
 
-### Phase 3 — Transforms unification
+### Phase 3 — Transforms unification (nav only)
 
-- Make Visualization able to operate over the `measurements` view; reposition
-  Processing as a general **Analysis** transform; unify the nav "Analysis" area
-  (Visualization + Analyze/Process presented together over Measurements).
-- Deprecate redundant endpoints behind redirects (see
+- Reposition Processing as a general **Analysis** transform and unify the nav
+  "Analysis" area (Analyze/Process, with Visualization as a navigational grouping
+  only). **Visualization-over-the-read-model is deferred (FR-007)** — its charts
+  need layout columns the scalar view omits, so it keeps sourcing `parsed_records`
+  and its behavior is unchanged.
+- Add the `/processing` → Analysis **frontend** redirect/alias (see
   [`contracts/routes-and-api.md`](./contracts/routes-and-api.md)).
-- **Migration:** none required beyond Phase 1's view (visualization gains a
-  view-sourced path; parsed-only chart paths remain for chart types that need
-  layout columns absent from the view — see Risks).
-- **Testing:** assert visualization-over-view; assert Analysis nav + legacy
-  `/processing` redirect; smoke-green.
+- **Migration:** none.
+- **Testing:** assert the Analysis nav grouping + the `/processing` frontend
+  redirect resolve; smoke-green.
 
 ## Data Model Changes
 
 - **Phase 1 migration** — `migrations/NNN_measurements_view.sql`: `CREATE VIEW
   measurements AS SELECT … FROM test_data UNION ALL SELECT … FROM parsed_records`.
   Read-only; no tables/rows altered.
-- **Phase 2 migration** — `migrations/NNN_fold_performance_into_raw_data.sql`:
-  `INSERT INTO raw_data (…) SELECT … FROM performance_datasets` +
-  `INSERT INTO raw_data_files (…) SELECT … FROM performance_dataset_files JOIN …`.
-  Forward-only, additive. Source tables retained.
-- **Data-safety note:** the view introduces no deletable entity. Folded
-  performance artifacts become ordinary `raw_data` rows, inheriting the existing
-  Strong-tier deletion (`delete_raw_data` → `backup_database()` +
-  `ON DELETE CASCADE` on `raw_data_files` + archive/audit). The pre-existing
-  `performance_datasets` deletion row in `docs/Data_Flow.md` stays until those
-  tables are removed in a later cleanup.
+- **Phase 2 migration** — `migrations/NNN_artifacts_view.sql`: `CREATE VIEW
+  artifacts AS SELECT … FROM raw_data UNION ALL SELECT …(mapped)… FROM
+  performance_datasets` plus `CREATE VIEW artifact_files AS SELECT … FROM
+  raw_data_files UNION ALL SELECT …(mapped)… FROM performance_dataset_files`.
+  Read-only; no tables/rows/files altered.
+- **Data-safety note:** neither view introduces a deletable entity. Nothing is
+  copied, so a physical file is referenced by exactly one row/owner as today:
+  raw_data-origin artifacts delete via `delete_raw_data`, performance-origin via
+  `delete_performance_dataset` (both `backup_database()` + `ON DELETE CASCADE` +
+  archive/audit). The existing `performance_datasets` deletion row in
+  `docs/Data_Flow.md` stays valid unchanged.
 - Full column mappings and the exact view SQL: [`./data-model.md`](./data-model.md).
 
 ## API / Route Contracts
@@ -207,10 +236,10 @@ brand-new endpoints. Key behavior changes:
 | Aspect | Current | Target |
 |--------|---------|--------|
 | Analysis source | `run_processing` reads `test_data` only | reads `measurements` view (both sources) |
-| Visualization source | `parsed_records` only | may source `measurements` view |
-| Performance nav | top-level block + `/api/performance-datasets` | artifact type `data_type='performance'` under Raw Data; route redirects |
+| Visualization source | `parsed_records` only | **unchanged** — `parsed_records` (FR-007 deferred) |
+| Performance nav | top-level block + `/api/performance-datasets` | artifact type `data_type='performance'` via `artifacts` view; frontend redirect. API endpoints stay live over retained tables |
 | "Data Base" nav | `/test-data` labelled "Data Base" | relabelled "Measurements / 测试结果" (same route) |
-| Legacy routes | `/raw-data`, `/test-data`, `/performance-datasets`, `/processing`, `/data`, `/performance` | all still resolve (redirect/alias) |
+| Legacy routes | `/raw-data`, `/test-data`, `/performance-datasets`, `/processing`, `/data`, `/performance` | all still resolve (frontend redirect/alias) |
 
 Full current→target route mapping, redirect notes, and endpoint behavior:
 [`./contracts/routes-and-api.md`](./contracts/routes-and-api.md).
@@ -222,16 +251,17 @@ Full current→target route mapping, redirect notes, and endpoint behavior:
   only, backend write path untouched); docs copy (`docs/DOMAIN_MODEL.md`
   follow-ups, `docs/ARCHITECTURE.md` glossary if needed).
 - **Phase 1:** `migrations/NNN_measurements_view.sql`;
-  `app/features/processing.py` (`fetch_processing_source`); `tests/smoke_test.py`.
-- **Phase 2:** `migrations/NNN_fold_performance_into_raw_data.sql`;
-  `app/features/performance.py` / `app/features/raw_data.py` (create-path
-  reframe); `app/http/handler.py` (performance route redirects);
-  `frontend/src/router/index.tsx`, `frontend/src/pages/*`; `tests/smoke_test.py`;
-  `docs/Data_Flow.md`.
-- **Phase 3:** `app/features/visualization.py` (view-sourced path);
-  `frontend/src/utils/constants.ts` + `frontend/src/router/index.tsx` (Analysis
-  grouping + redirects); `app/http/handler.py` (`/processing` alias);
+  `app/features/processing.py` (`fetch_processing_source` + `source`/
+  `source_row_id` in QC/normalize output); `tests/smoke_test.py`.
+- **Phase 2:** `migrations/NNN_artifacts_view.sql`;
+  `app/features/performance.py` / `app/features/raw_data.py` (Artifact reads via
+  the `artifacts` view; performance create-path reframe); **no** `handler.py`
+  change; `frontend/src/router/index.tsx`, `frontend/src/pages/*`;
+  `tests/smoke_test.py`.
+- **Phase 3:** `frontend/src/utils/constants.ts` +
+  `frontend/src/router/index.tsx` (Analysis grouping + `/processing` redirect);
   `tests/smoke_test.py`; `docs/ARCHITECTURE.md` / `docs/BACKEND_MODULES.md`.
+  (`visualization.py` untouched — FR-007 deferred.)
 
 ## Sequence / Flow (Phase 1 Analysis, the representative path)
 
@@ -244,44 +274,56 @@ Full current→target route mapping, redirect notes, and endpoint behavior:
 
 ## Risks & Trade-offs
 
-- **Data-migration risk (Phase 2).** `INSERT…SELECT` into `raw_data` must
-  generate a valid `raw_data_code` (a `UNIQUE NOT NULL` column with a
-  `RD-<uid>-<TYPE>-<date>-NNN` convention) and satisfy `raw_data`'s `NOT NULL`
-  columns (`raw_data_name`, `data_type`). Performance rows have no equivalent
-  code and no `raw_data_code`-shaped identity. **Mitigation:** synthesize a
-  deterministic code in the migration (see [`data-model.md`](./data-model.md));
-  take a backup first; keep the source tables until verified.
-- **Column-mapping gaps (Phase 2).** `performance_dataset_files` has **no
-  `sha256`, `file_ext`, `relative_path`-as-`raw_data`-expects, or
-  `preview_supported`** column; `raw_data_files` requires/defaults them.
-  `performance_datasets.total_bytes` maps to `raw_data.total_size`;
-  `collected_at`/`operator`/`status`/`notes` map cleanly, but
-  `aliquot_code`/`test_type`/`data_format`/`source_folder_name` have **no
-  `raw_data` home** and must be preserved in `metadata_json`. Detailed in
-  [`data-model.md`](./data-model.md).
+- **Artifacts-view mapping & identity (Phase 2).** The `artifacts` view must
+  project `performance_datasets` into `raw_data`'s shape: synthesize a
+  `raw_data_code`-shaped label (performance has none), map `total_bytes→
+  total_size` / `storage_dir→storage_path` / `collected_at→measured_at`, and
+  fold `aliquot_code`/`test_type`/`data_format`/`source_folder_name` (no
+  `raw_data` home) into a JSON `metadata_json` expression. `raw_data.id` and
+  `performance_datasets.id` overlap, so the view exposes `source` +
+  `source_row_id`; **any consumer that reads, links to, or deletes an artifact
+  must key off `(source, source_row_id)`**, not a bare `id`. Mitigation: since
+  nothing is copied, a bad projection is fixable by editing the (not-yet-applied)
+  view migration — no data to unwind. Detail in [`data-model.md`](./data-model.md).
+- **Artifact file-column gaps (Phase 2).** `performance_dataset_files` has **no
+  `sha256`, `file_ext`, or `preview_supported`** column; the `artifact_files`
+  view defaults them (`''` / derived / `0`). Read-only, lossless (the source
+  rows are untouched). Detail in [`data-model.md`](./data-model.md).
 - **View column-mapping gaps (Phase 1).** `parsed_records` has **no
   `metric_name`** (derived per `data_type` via `CASE` — RC-2), **no `unit`**
-  (emit `''` — RC-3), and **no `measured_at`** (use `created_at`). This is an
-  honest projection for the read model — acceptable because the view is additive
-  and Analysis groups by metric name + unit. Resolved in the spec's Resolved
-  Clarifications (RC-1..RC-4).
+  (emit `''` — RC-3), and **no `measured_at`** (use `created_at`); and the view's
+  identity is `source_row_id` + `source`, not `id` — so `run_qc`/`run_normalize`
+  must emit those (they currently emit `row["id"]`, which would `KeyError` on the
+  view). This is an honest projection for the read model — acceptable because the
+  view is additive and Analysis groups by metric name + unit. Resolved in the
+  spec's Resolved Clarifications (RC-1..RC-4).
 - **Metric-grouping usefulness (Phase 1, validation).** The parsed `metric_name`
   `CASE` composes a per-type label (`cd_sem` from `side`/`direction`/`row_group`;
   `resistance` literal; else `data_type`). This is a **design choice, not a
   proven grouping** — operators should confirm the resulting metric buckets are
   actually useful for Analysis before the derivation is considered final; the
   per-type composition is cheap to adjust in the view migration if not.
-- **Route/URL breakage → redirects.** Kept legacy routes as redirects/aliases
-  (the router already aliases `/data`→TestData and `/performance`→Performance, so
-  the pattern exists). Risk is low but must be covered by smoke assertions.
+- **Route/URL breakage → frontend redirects.** Legacy routes are kept as
+  **client-side** redirects/aliases — the router already aliases
+  `/data`→TestData and `/performance`→Performance, so the pattern exists there.
+  The backend performance API is left untouched (no new redirect pattern). Risk
+  is low but must be covered by smoke assertions.
+- **Delete/write routing for the `artifacts` view (Phase 2).** Because the view
+  spans two backing tables, a performance-origin artifact must be
+  created/deleted against `performance_datasets` and a raw_data-origin one
+  against `raw_data`. This routing (keyed on `source`) is the one net-new bit of
+  feature logic; both delete paths already exist, so it is dispatch, not new
+  deletion machinery.
 - **Frontend rework.** Regrouping nav (Phase 3) is the largest UI change; bounded
   by keeping page components intact and only re-labeling/re-grouping.
-- **Transitional dual-read.** Analysis reads a UNION view; slightly more work per
-  query than a single-table scan. At lab data volume this is negligible; indexes
-  on `test_data(metric_name)` and `parsed_records(data_type)` already exist.
-- **Scope discipline.** Characterization fold, physical unified table, and
-  deleting deprecated performance tables are all explicitly deferred to prevent
-  scope creep (Article X).
+- **Transitional dual-read.** Each view reads a UNION of two tables; slightly
+  more work per query than a single-table scan. At lab data volume this is
+  negligible; indexes on `test_data(metric_name)`, `parsed_records(data_type)`,
+  and the `sample_id` / dataset indexes already exist.
+- **Scope discipline.** Characterization fold, physical unified tables (both
+  measurements and artifacts), visualization-over-view (FR-007), and deleting
+  deprecated performance tables are all explicitly deferred to prevent scope
+  creep (Article X).
 
 ## Testing Approach
 
@@ -289,10 +331,12 @@ Full current→target route mapping, redirect notes, and endpoint behavior:
 - **Phase 0:** assert no migration added (`schema_migrations` unchanged); smoke green — covers AC-001..AC-003.
 - **Phase 1:** seed manual + parsed numeric data; assert view returns both and
   Analysis `source_count` reflects both — covers AC-004..AC-006.
-- **Phase 2:** apply fold; assert folded rows queryable via `raw_data`
-  (`data_type='performance'`); assert `/performance-datasets` redirects; assert a
-  pre-fold backup exists — covers AC-007..AC-009.
-- **Phase 3:** assert visualization-over-view; assert Analysis nav + `/processing`
-  redirect — covers AC-010..AC-012.
+- **Phase 2:** apply the `artifacts` view migration; assert performance rows are
+  queryable via the `artifacts` view (`data_type='performance'`) and their files
+  via `artifact_files`; assert no source row/file was altered; assert
+  `/performance-datasets` resolves via the frontend redirect — covers
+  AC-007..AC-009.
+- **Phase 3:** assert the Analysis nav grouping + the `/processing` frontend
+  redirect resolve — covers AC-011..AC-012 (AC-010 deferred with FR-007).
 - **Manual checks:** click each relabelled nav entry and each legacy URL to
-  confirm redirects resolve.
+  confirm the frontend redirects resolve.

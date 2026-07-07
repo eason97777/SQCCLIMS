@@ -24,7 +24,8 @@ Sample-rooted, two-axis grouping (conceptual — exact component layout TBD):
 - **Analysis (Transforms over Measurements)**
   - **数据处理 / Analysis** — `/processing` (analyze/process; reads the view)
   - Visualization — surfaced as a transform over Measurements (entered from
-    parsed data / Measurements context; no standalone top-level block required)
+    parsed data / Measurements context; no standalone top-level block required).
+    *Navigational grouping only* — it still reads `parsed_records` (FR-007 deferred).
 
 Performance **ceases to be a top-level nav block**; it becomes an artifact type
 under Raw Data / Artifacts.
@@ -53,38 +54,41 @@ Endpoints keep their method + path; the **behavior** shifts as noted.
 
 | Method | Path | Current behavior | Target behavior | Phase |
 |--------|------|------------------|-----------------|-------|
-| POST | `/api/process` | `run_processing` reads `test_data` only | reads **`measurements` view** (manual + parsed) | 1 |
+| POST | `/api/process` | `run_processing` reads `test_data` only | reads **`measurements` view** (manual + parsed); QC/normalize rows gain a `source` field (`manual`/`parsed`) beside `source_row_id` (replacing the old ambiguous `id`) | 1 |
 | GET | `/api/process-results` | list `processing_results` | unchanged (results now reflect both sources) | 1 |
 | GET | `/api/test-data` | list manual measurements | unchanged (backs the relabelled "Measurements" screen) | 0 |
 | POST | `/api/test-data`, `/api/test-data/bulk` | create manual measurements | unchanged (manual entry → `source='manual'`) | 0 |
-| POST | `/api/parsed-data/{id}/visualize` | visualize from `parsed_records` | may also source the **`measurements` view** (both sources) | 3 |
-| GET | `/api/performance-datasets` | list performance datasets | **deprecated**; behavior served via Raw Data (`data_type='performance'`). Kept responding for back-compat or 308-redirected to `/api/raw-data?data_type=performance` | 2 |
-| POST | `/api/performance-datasets` | create performance dataset (multipart) | **deprecated**; uploads reframed to the Artifact store (`raw_data`, `data_type='performance'`) | 2 |
-| GET | `/api/performance-datasets/{id}/files` | list dataset files | served via `raw_data` file listing after fold | 2 |
-| DELETE | `/api/performance-datasets/{id}` | Strong-tier delete | folded artifacts deleted via `raw_data` Strong-tier path | 2 |
+| POST | `/api/parsed-data/{id}/visualize` | visualize from `parsed_records` | **unchanged** — still `parsed_records` (FR-007 deferred) | — |
+| GET | `/api/performance-datasets` | list performance datasets | **unchanged & live** (reads the retained tables); deprecated in the UI only — the Artifacts page lists performance via the `artifacts` view | 2 |
+| POST | `/api/performance-datasets` | create performance dataset (multipart) | **unchanged & live**, but **deprecated**: new uploads go through the Artifact store (`POST /api/raw-data`, `data_type='performance'`) instead | 2 |
+| GET | `/api/performance-datasets/{id}/files` | list dataset files | **unchanged & live** (files also surface via the `artifact_files` view) | 2 |
+| DELETE | `/api/performance-datasets/{id}` | Strong-tier delete | **unchanged** — performance-origin artifacts delete here; raw_data-origin via `/api/raw-data` (the Artifacts UI routes by `source`) | 2 |
 | GET | `/api/processing-jobs` | list parse/visualization job log | unchanged; **presented as "parse / visualization job log"** in copy | 0 |
 
 ### Redirect / back-compat notes
 
 - **Frontend routes** (`/performance-datasets`, `/performance`, `/processing`,
   `/test-data`, `/data`) MUST all continue to resolve. Relabels (Phase 0) keep
-  the route; folds (Phase 2/3) turn removed blocks into client-side redirects to
-  their new home so bookmarks do not 404 (FR-008).
-- **API endpoints** for performance are **deprecated, not deleted**, during this
-  reform. Preferred target: keep them responding (thin shims over `raw_data`) or
-  issue an HTTP redirect to the Raw Data equivalent. Hard removal of the
-  performance API + tables is a separate, later, approved cleanup — **out of
-  scope** here.
-- **Auth posture unchanged** (Article XI): relabelled/redirected routes keep
+  the route; removed blocks (Phase 2/3) become **client-side** redirects to their
+  new home so bookmarks do not 404 (FR-008). This reuses the router's existing
+  alias pattern (`/data`→TestData, `/performance`→Performance).
+- **No backend redirects are introduced.** Because the performance tables are
+  retained, the performance **API** endpoints stay **live and unchanged** over
+  those tables through the deprecation window — no 308, no shim rewrite, no new
+  transport pattern in `handler.py`. Hard removal of the performance API + tables
+  is a separate, later, approved cleanup — **out of scope** here.
+- **Auth posture unchanged** (Article XI): relabelled routes keep
   `GET ≤ operator-write ≤ admin-delete` and remain a true no-op when auth is
-  disabled. Redirects do not bypass `authorize()`.
+  disabled. The frontend redirects are client-side and do not touch
+  `authorize()`.
 - **Error mapping unchanged** (Article VI): feature code still raises
   `ValueError` / `LookupError` / `ConflictError`; `route()` maps centrally.
 
 ## 4. What this contract does NOT change
 
-- No new database-writing endpoints are introduced by the reform (the view is
-  read-only; the fold is a migration, not an endpoint).
+- No new database-writing endpoints are introduced by the reform (the
+  `measurements` and `artifacts` views are read-only — they are migrations, not
+  endpoints).
 - Parser and chart *algorithms* are untouched — only the *source* a transform
   reads from may change (to the view).
 - Characterization, samples, MES, and process-records endpoints are unchanged.
