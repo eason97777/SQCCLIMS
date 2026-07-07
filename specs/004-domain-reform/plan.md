@@ -25,7 +25,7 @@
 | Article | Verdict | Notes |
 |---------|---------|-------|
 | I — Standard-library backend core, one sanctioned dependency boundary | **PASS** | The `measurements` and `artifacts` views are pure `sqlite3`; the legacy-route redirects are frontend-only (React Router). No third-party import enters `app/**` or `server.py`. Visualization keeps its existing matplotlib use confined to `parsers/`; this reform does not add any dependency. |
-| II — Layered architecture, one-way dependencies | **PASS** | The views are read inside feature modules (`processing.py` for `measurements`; `raw_data.py` / `performance.py` for `artifacts`); `handler.py` gains no new logic (legacy-route redirects are frontend-only). No infra module imports a feature; no new cycles. |
+| II — Layered architecture, one-way dependencies | **PASS** | The views are read inside feature modules (`processing.py` for `measurements`; `raw_data.py`'s list query for `artifacts`); `handler.py` gains no new logic (legacy-route redirects are frontend-only). No infra module imports a feature; no new cycles. |
 | III — One feature owns its domain | **PASS (with justification)** | The reform *consolidates* how features are grouped in the UI, but the backend keeps one module per domain (`raw_data`, `test_data`, `processing`, `performance`, `parsing`). Performance is *surfaced* alongside `raw_data` via the shared `artifacts` read model — its own module still owns writes/deletes — so this is improved UI cohesion, **not** spreading a feature across modules. The `measurements` and `artifacts` views are shared read infrastructure consumed by existing feature modules, not new competing owners. See "Article III note" below. |
 | IV — Data safety is non-negotiable | **PASS** | **No phase moves or deletes data** — both Measurements (Phase 1) and Artifacts (Phase 2) are additive read-model views over existing tables, so no pre-migration snapshot is needed. No new deletable entity is introduced: performance-origin artifacts keep deleting via the existing `delete_performance_dataset` path, raw_data-origin via `delete_raw_data` (both already do `backup_database()` + `ON DELETE CASCADE` + `deletion_audit`). Because nothing is copied, there is **no shared-file / double-delete hazard**. |
 | V — Forward-only, checksum-guarded migrations | **PASS** | Every schema change is a **new** `migrations/NNN_*.sql`, and each is a single additive `CREATE VIEW` (the `measurements` view in Phase 1; the `artifacts` view in Phase 2). No applied file is edited; `init_db()` baseline is untouched. Migration SQL contains no `BEGIN`/`COMMIT`. |
@@ -58,10 +58,10 @@ reviewers see it was considered.
   - **Feature modules** — `app/features/processing.py` (repoint its source query
     from `test_data` to the `measurements` view, and emit `source` +
     `source_row_id` in QC/normalize output instead of the now-ambiguous `id`);
-    `app/features/raw_data.py` / `app/features/performance.py` (Artifact list/
-    detail read the `artifacts` view; the standalone performance create path is
-    reframed to write `raw_data` going forward). `visualization.py` is
-    **untouched** (FR-007 deferred).
+    `app/features/raw_data.py` (Artifact **list** query reads the `artifacts`
+    view; detail/files/delete stay per-source) / `app/features/performance.py`
+    (the standalone performance create path is reframed to write `raw_data`
+    going forward). `visualization.py` is **untouched** (FR-007 deferred).
   - **HTTP** — `app/http/handler.py` is **unchanged** for routing; legacy-route
     redirects are frontend-only (React Router). No business logic added.
   - **db / validation / storage / deletion** — unchanged; performance-origin
@@ -254,8 +254,8 @@ Full current→target route mapping, redirect notes, and endpoint behavior:
   `app/features/processing.py` (`fetch_processing_source` + `source`/
   `source_row_id` in QC/normalize output); `tests/smoke_test.py`.
 - **Phase 2:** `migrations/NNN_artifacts_view.sql`;
-  `app/features/performance.py` / `app/features/raw_data.py` (Artifact reads via
-  the `artifacts` view; performance create-path reframe); **no** `handler.py`
+  `app/features/raw_data.py` (Artifact **list** read via the `artifacts` view) /
+  `app/features/performance.py` (create-path reframe); **no** `handler.py`
   change; `frontend/src/router/index.tsx`, `frontend/src/pages/*`;
   `tests/smoke_test.py`.
 - **Phase 3:** `frontend/src/utils/constants.ts` +
