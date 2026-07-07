@@ -157,6 +157,7 @@ unchanged. `LIMS_AUTH_DISABLED=1` hard-forces auth off even if enabled.
 - [`docs/BACKEND_MODULES.md`](docs/BACKEND_MODULES.md) — per-module backend reference (responsibility, key functions, endpoints).
 - [`docs/Code_Structure.md`](docs/Code_Structure.md) — the full directory map.
 - [`docs/CODE_PRINCIPLES.md`](docs/CODE_PRINCIPLES.md) — coding conventions for humans and coding agents.
+- [`docs/DOMAIN_MODEL.md`](docs/DOMAIN_MODEL.md) — domain-model review: the storage-vs-transform axes, block boundaries, and naming collisions (advisory).
 - [`docs/Data_Flow.md`](docs/Data_Flow.md) — data flow + the authoritative deletion & data-safety policy.
 - [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — plain-language definitions of domain and tech terms.
 - [`docs/Development_Guide.md`](docs/Development_Guide.md) — redirect to [`CONTRIBUTING.md`](CONTRIBUTING.md) / this README.
