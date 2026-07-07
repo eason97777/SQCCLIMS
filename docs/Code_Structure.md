@@ -23,6 +23,7 @@ The application lives directly at the repo root (`SQCCLIMS/`).
     functions, endpoints).
   - `Code_Structure.md` — this file; the canonical directory map.
   - `CODE_PRINCIPLES.md` — coding conventions and principles.
+  - `DOMAIN_MODEL.md` — domain-model review (storage-vs-transform axes, boundaries, naming collisions; advisory).
   - `Data_Flow.md` — data flow plus the deletion/safety policy (canonical for
     what must not be committed).
   - `GLOSSARY.md` — domain and project terminology.
