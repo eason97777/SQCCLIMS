@@ -246,22 +246,39 @@ Full current→target route mapping, redirect notes, and endpoint behavior:
 
 ## Affected Modules & Files (per phase)
 
-- **Phase 0:** `frontend/src/utils/constants.ts`; the manual test-data entry
-  page/form (`frontend/src/pages/*` — reframe as "Add a measurement", label/UX
-  only, backend write path untouched); docs copy (`docs/DOMAIN_MODEL.md`
-  follow-ups, `docs/ARCHITECTURE.md` glossary if needed).
+> **These lists are a non-exhaustive starting point, not the full blast radius.**
+> Phase 0 proved it: the plan implied ~3 targets (`constants.ts` + `pages/*` +
+> docs) but a copy/label change that crosses feature boundaries actually touched
+> **15 files** — nav, the manual-entry form, the Analysis page *and its
+> components*, the dashboard, raw-data views, the processing store, and the
+> glossary. **Before implementing any phase, `grep` the whole repo for the
+> affected terms/symbols and scope from the results** — do not trust this list
+> alone. The risk is highest for **UI copy/label changes** (a term recurs across
+> many components); it is lowest for backend-localized changes.
+
+- **Phase 0 (as-built):** `frontend/src/utils/constants.ts`; the manual-entry form
+  (`components/testData/MetricInputForm.tsx`); the Analysis page + its components
+  (`pages/ProcessingPage.tsx`, `components/processing/*`); dashboard + raw-data
+  copy (`pages/DashboardPage.tsx`, `pages/RawDataPage.tsx`,
+  `components/rawData/{ProcessingJobsTable,RawDataDetailPanel,ResistanceVisualizationPanel}.tsx`);
+  `stores/processingStore.ts`; `pages/TestDataPage.tsx`; `docs/GLOSSARY.md`.
 - **Phase 1:** `migrations/NNN_measurements_view.sql`;
   `app/features/processing.py` (`fetch_processing_source` + `source`/
   `source_row_id` in QC/normalize output); `tests/smoke_test.py`.
+  *Backend-localized — the output change is invisible to the frontend (it ignores
+  the row `id`), so no UI files; this list is expected to hold as-is.*
 - **Phase 2:** `migrations/NNN_artifacts_view.sql`;
   `app/features/raw_data.py` (Artifact **list** read via the `artifacts` view) /
   `app/features/performance.py` (create-path reframe); **no** `handler.py`
   change; `frontend/src/router/index.tsx`, `frontend/src/pages/*`;
-  `tests/smoke_test.py`.
+  `tests/smoke_test.py`. *Re-grep first: the frontend "route by source" likely
+  reaches the raw-data / performance list + detail components beyond `pages/*`.*
 - **Phase 3:** `frontend/src/utils/constants.ts` +
   `frontend/src/router/index.tsx` (Analysis grouping + `/processing` redirect);
   `tests/smoke_test.py`; `docs/ARCHITECTURE.md` / `docs/BACKEND_MODULES.md`.
-  (`visualization.py` untouched — FR-007 deferred.)
+  (`visualization.py` untouched — FR-007 deferred.) ***Highest re-scoping risk*** —
+  like Phase 0, an Analysis nav regroup will touch more UI copy than listed
+  (breadcrumbs, any component naming the grouping). Grep before scoping.
 
 ## Sequence / Flow (Phase 1 Analysis, the representative path)
 
