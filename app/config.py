@@ -41,6 +41,10 @@ RAW_DATA_TYPES = {
     "report": {"label": "报告文件", "category": "report"},
     "instrument_folder": {"label": "仪器原始目录", "category": "folder"},
     "generic_file": {"label": "通用文件", "category": "other"},
+    # Spec 004 Phase 2: performance datasets surface as an artifact type (files
+    # only, no parser). New performance uploads write raw_data as this type;
+    # legacy performance_datasets rows surface via the `artifacts` view.
+    "performance": {"label": "性能数据集", "category": "performance"},
 }
 
 GARBLED_TEXT_MARKERS = ("�", "锟", "鎬", "鏍", "����")
