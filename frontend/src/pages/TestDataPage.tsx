@@ -108,7 +108,7 @@ export function TestDataPage() {
         <section className="panel panel-section-spacing">
           <div className="empty-row">
             <div className="page-message">
-              <strong>测试数据库操作失败</strong>
+              <strong>测试结果操作失败</strong>
               <span>{pageError}</span>
             </div>
           </div>

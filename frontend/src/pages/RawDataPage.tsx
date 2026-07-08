@@ -173,7 +173,7 @@ function RawDataSummarySide({
               <dd>{rawData.parsed_data_count ?? parsedData.length}</dd>
             </div>
             <div>
-              <dt>处理任务</dt>
+              <dt>解析 / 可视化任务</dt>
               <dd>{rawData.processing_job_count ?? processingJobs.length}</dd>
             </div>
             <div>

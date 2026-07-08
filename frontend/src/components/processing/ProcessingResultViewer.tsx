@@ -111,7 +111,7 @@ function renderTable(headers: string[], rows: Array<Array<string | number>>) {
 
 export function ProcessingResultViewer({ result }: ProcessingResultViewerProps) {
   if (!result) {
-    return <div className="empty-row">暂无处理结果</div>;
+    return <div className="empty-row">暂无分析结果</div>;
   }
 
   const parsed = tryParseResult(result.result_json);

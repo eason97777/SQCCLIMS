@@ -104,7 +104,7 @@ export function MetricInputForm({
   return (
     <>
       <div className="panel-header">
-        <h3>数值数据录入</h3>
+        <h3>添加测试结果</h3>
       </div>
       <form className="form-grid" onSubmit={handleSubmit}>
         {formError ? <div className="form-error full">{formError}</div> : null}

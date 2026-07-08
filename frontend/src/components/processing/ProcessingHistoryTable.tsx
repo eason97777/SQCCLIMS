@@ -12,7 +12,7 @@ export function ProcessingHistoryTable({
   onSelect,
 }: ProcessingHistoryTableProps) {
   if (!results.length) {
-    return <div className="empty-row">暂无处理历史</div>;
+    return <div className="empty-row">暂无分析历史</div>;
   }
 
   return (
