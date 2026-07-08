@@ -66,7 +66,7 @@ export function ProcessingJobsTable({ jobs }: ProcessingJobsTableProps) {
   );
 
   if (jobs.length === 0) {
-    return <div className="empty-row">暂无处理历史</div>;
+    return <div className="empty-row">暂无任务日志</div>;
   }
 
   return (

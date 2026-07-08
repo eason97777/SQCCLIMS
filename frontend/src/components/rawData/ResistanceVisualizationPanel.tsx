@@ -289,7 +289,7 @@ export function ResistanceVisualizationPanel({ selectedParsedData, onVisualize }
         },
         layout_values: layoutValues,
       });
-      setSaveMessage("当前分析已保存，可在处理历史中查看输出。");
+      setSaveMessage("当前分析已保存，可在「解析 / 可视化任务日志」中查看输出。");
     } catch (err) {
       setSaveMessage(err instanceof Error ? err.message : "保存当前分析失败");
     } finally {

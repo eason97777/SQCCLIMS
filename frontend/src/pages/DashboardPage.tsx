@@ -25,7 +25,7 @@ export function DashboardPage() {
           <strong>{summary?.metric_count ?? 0}</strong>
         </article>
         <article className="kpi-card">
-          <span>处理结果</span>
+          <span>分析结果</span>
           <strong>{summary?.result_count ?? 0}</strong>
         </article>
       </div>
@@ -115,7 +115,7 @@ export function DashboardPage() {
 
       <section className="panel history-panel">
         <div className="panel-header">
-          <h3>最近处理结果</h3>
+          <h3>最近分析结果</h3>
         </div>
         {loading ? (
           <div className="empty-row">加载中...</div>
@@ -131,7 +131,7 @@ export function DashboardPage() {
             </div>
           </div>
         ) : (
-          <div className="empty-row">暂无处理结果</div>
+          <div className="empty-row">暂无分析结果</div>
         )}
       </section>
     </section>

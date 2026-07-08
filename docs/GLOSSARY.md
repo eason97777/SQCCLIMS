@@ -10,6 +10,12 @@ Plain-language definitions of the domain and technical terms used in SQCCLIMS. E
 
 **LIMS vs MES** — LIMS answers "what was measured on this sample and what are the results?"; MES answers "where is this sample in the process and what step is next?". SQCCLIMS combines both around a shared `samples` table.
 
+**Measurements (测试结果)** — the unified concept for numeric points about a sample, regardless of how they arrived: typed in by hand (`test_data`, `source='manual'`) or extracted from an instrument file (`parsed_records`, `source='parsed'`). Spec 004 relabels the former "测试数据库 / Data Base" screen as **测试结果 / Measurements**; from Phase 1 both are exposed through one `measurements` read model.
+
+**Artifact (原始数据 / Artifacts)** — files attached to a sample, discriminated by `data_type`. The general Artifact store is `raw_data`; from Phase 2 the `artifacts` read model presents performance datasets alongside it as `data_type='performance'`.
+
+**The three "processing" concepts (disambiguated by spec 004)** — SQCCLIMS historically overloaded the word "processing". They are three distinct things: (1) **解析 / 可视化任务日志** — the `processing_jobs` table, an audit log of parse and visualization jobs on Raw Data; (2) **数据分析 / Analysis** — the stats/QC/normalize feature at `/processing` (`POST /api/process`), which operates over Measurements; (3) **工艺记录 / MES traveller** — `process_records`, the shop-floor process record. Only the traveller is "process" in the MES sense.
+
 **CD / CD-SEM (Critical Dimension / CD Scanning Electron Microscope)** — the critical dimension is the smallest measured feature width on a wafer; a CD-SEM measures it. SQCCLIMS ingests CD/SEM CSV/XLSX files and renders them as violin plots.
 
 **STDF (Standard Test Data Format)** — a binary industry-standard format for semiconductor test data. Not currently ingested by SQCCLIMS (which uses CSV/XLSX), but a likely future raw-data type.

@@ -4,9 +4,9 @@ export const NAV_ITEMS = [
   { path: "/process-records", label: "工艺记录" },
   { path: "/raw-data", label: "原始数据" },
   { path: "/characterization", label: "表征数据中心" },
-  { path: "/test-data", label: "测试数据库" },
+  { path: "/test-data", label: "测试结果" },
   { path: "/performance-datasets", label: "性能数据集" },
-  { path: "/processing", label: "数据处理" },
+  { path: "/processing", label: "数据分析" },
 ] as const;
 
 export const VIEW_META: Record<string, { title: string; eyebrow: string }> = {
@@ -28,14 +28,14 @@ export const VIEW_META: Record<string, { title: string; eyebrow: string }> = {
     title: "表征数据中心",
     eyebrow: "Characterization Center",
   },
-  "/test-data": { title: "测试数据库", eyebrow: "Data Base" },
+  "/test-data": { title: "测试结果", eyebrow: "Measurements" },
   "/performance-datasets": {
     title: "性能数据集",
     eyebrow: "Performance Datasets",
   },
-  "/data": { title: "测试数据库", eyebrow: "Data Base" },
+  "/data": { title: "测试结果", eyebrow: "Measurements" },
   "/performance": { title: "性能数据集", eyebrow: "Performance Datasets" },
-  "/processing": { title: "数据处理模块", eyebrow: "Processing" },
+  "/processing": { title: "数据分析", eyebrow: "Analysis" },
 };
 
 export const SAMPLE_STATUS_OPTIONS = [

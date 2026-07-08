@@ -63,7 +63,7 @@ export function useProcessingStore(): ProcessingStoreState {
         setCurrentResult(nextResults[0] || null);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载处理历史失败");
+      setError(err instanceof Error ? err.message : "加载分析历史失败");
     } finally {
       setLoading(false);
     }
@@ -103,7 +103,7 @@ export function useProcessingStore(): ProcessingStoreState {
       setCurrentResult(result);
       await refreshProcessingResults();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "运行处理任务失败");
+      setError(err instanceof Error ? err.message : "运行分析任务失败");
       throw err;
     } finally {
       setRunning(false);

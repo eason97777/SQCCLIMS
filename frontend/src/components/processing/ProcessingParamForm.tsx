@@ -36,7 +36,7 @@ export function ProcessingParamForm({
   return (
     <>
       <div className="panel-header">
-        <h3>处理任务</h3>
+        <h3>分析任务</h3>
       </div>
       <form className="form-grid" onSubmit={handleSubmit}>
         <label className="full">
@@ -105,7 +105,7 @@ export function ProcessingParamForm({
         </label>
         <div className="form-actions full">
           <button type="submit" disabled={running}>
-            {running ? "运行中..." : "运行处理"}
+            {running ? "运行中..." : "运行分析"}
           </button>
         </div>
       </form>

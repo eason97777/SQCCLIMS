@@ -9,7 +9,7 @@ export function ProcessingTypeSelector({
 }: ProcessingTypeSelectorProps) {
   return (
     <fieldset className="method-group full">
-      <legend>处理方法</legend>
+      <legend>分析方法</legend>
       <label>
         <input
           type="radio"

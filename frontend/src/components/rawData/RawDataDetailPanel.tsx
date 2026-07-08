@@ -114,7 +114,7 @@ export function RawDataDetailPanel({
           ["files", "原始文件"],
           ["parsed", "标准化结果"],
           ["visualization", "可视化结果"],
-          ["jobs", "处理历史"],
+          ["jobs", "解析 / 可视化任务日志"],
         ].map(([tab, label]) => (
           <button
             key={tab}
@@ -205,7 +205,7 @@ export function RawDataDetailPanel({
 
         {activeDetailTab === "jobs" ? (
           <section className="raw-detail-section">
-            <h4>处理历史</h4>
+            <h4>解析 / 可视化任务日志</h4>
             <ProcessingJobsTable jobs={processingJobs} />
           </section>
         ) : null}
