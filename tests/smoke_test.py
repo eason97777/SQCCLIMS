@@ -190,6 +190,83 @@ def check_legacy_duplicate_migration() -> tuple[list[str], list[str]]:
     return passes, failures
 
 
+def check_measurements_view() -> tuple[list[str], list[str]]:
+    """004 Phase 1 (AC-004/AC-006): apply migrations/007_measurements_view.sql to a
+    scratch DB seeded with manual (test_data) and parsed (parsed_records) rows and
+    assert the `measurements` view UNIONs both sources, derives the parsed
+    metric_name per data_type (cd_sem composed from side/direction/row_group;
+    resistance -> literal), excludes NULL numeric_value, and disambiguates the
+    overlapping source ids via (source, source_row_id)."""
+    passes: list[str] = []
+    failures: list[str] = []
+    mig = APP_ROOT / "migrations" / "007_measurements_view.sql"
+    if not mig.exists():
+        return passes, [f"migration not found: {mig}"]
+    try:
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            "CREATE TABLE test_data (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "sample_id INTEGER, test_name TEXT, metric_name TEXT, numeric_value REAL, "
+            "unit TEXT, measured_at TEXT, created_at TEXT)"
+        )
+        conn.execute(
+            "CREATE TABLE parsed_records (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "sample_id INTEGER, data_type TEXT, numeric_value REAL, side TEXT, "
+            "direction TEXT, row_group TEXT, created_at TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO test_data (sample_id, test_name, metric_name, numeric_value, "
+            "unit, measured_at, created_at) VALUES (1, 'resistance', 'Rs', 12.5, 'ohm', 't', 't')"
+        )
+        conn.executemany(
+            "INSERT INTO parsed_records (sample_id, data_type, numeric_value, side, "
+            "direction, row_group, created_at) VALUES (?, ?, ?, ?, ?, ?, 't')",
+            [
+                (1, "resistance", 34.0, "", "", ""),      # id=1: overlaps the manual id
+                (1, "cd_sem", 5.0, "left", "x", "row1"),  # id=2: composed metric label
+                (1, "cd_sem", None, "left", "x", "row2"), # id=3: NULL value -> excluded
+            ],
+        )
+        conn.commit()
+
+        conn.execute("BEGIN")
+        for stmt in split_sql_statements(mig.read_text(encoding="utf-8")):
+            conn.execute(stmt)
+        conn.execute("COMMIT")
+
+        rows = list(conn.execute(
+            "SELECT source, source_row_id, metric_name, numeric_value "
+            "FROM measurements ORDER BY source, source_row_id"))
+        got = [(r["source"], r["source_row_id"], r["metric_name"], r["numeric_value"]) for r in rows]
+
+        if ("manual", 1, "Rs", 12.5) in got:
+            passes.append("measurements view: manual (test_data) row unioned")
+        else:
+            failures.append(f"measurements view missing manual row: {got}")
+
+        parsed_metrics = sorted(m for s, _, m, _ in got if s == "parsed")
+        if parsed_metrics == ["cd_sem/left/x row1", "resistance"]:
+            passes.append("measurements view: parsed metric_name derived (cd_sem composed, resistance literal)")
+        else:
+            failures.append(f"measurements view parsed metric_name wrong: {parsed_metrics}")
+
+        if len(got) == 3 and all(v is not None for _, _, _, v in got):
+            passes.append("measurements view: NULL numeric_value excluded")
+        else:
+            failures.append(f"measurements view did not exclude NULL numeric_value: {got}")
+
+        idents = {(s, i) for s, i, _, _ in got}
+        if ("manual", 1) in idents and ("parsed", 1) in idents:
+            passes.append("measurements view: overlapping ids disambiguated by source")
+        else:
+            failures.append(f"measurements view identity not disambiguated: {idents}")
+        conn.close()
+    except Exception as exc:  # noqa: BLE001
+        failures.append(f"measurements view check raised {type(exc).__name__}: {exc}")
+    return passes, failures
+
+
 def wait_until_ready(base: str, proc: subprocess.Popen, timeout: float = 25.0) -> None:
     deadline = time.time() + timeout
     last_err = None
@@ -225,6 +302,11 @@ def run() -> int:
     mig_passes, mig_failures = check_legacy_duplicate_migration()
     passes.extend(mig_passes)
     failures.extend(mig_failures)
+
+    # 004 Phase 1: the measurements read model (in-process; no server needed).
+    mv_passes, mv_failures = check_measurements_view()
+    passes.extend(mv_passes)
+    failures.extend(mv_failures)
 
     with tempfile.TemporaryDirectory(prefix="sqcclims-smoke-") as tmp:
         env = dict(os.environ)
@@ -294,6 +376,27 @@ def run() -> int:
                     failures.append("created sample not reflected in /api/samples list")
             except Exception as exc:  # noqa: BLE001
                 failures.append(f"sample readback raised {type(exc).__name__}: {exc}")
+
+            # 3b) 004 Phase 1: Analysis (/api/process) reads the measurements view.
+            # Seed a manual measurement on the sample, run stats, and assert the
+            # persisted result carries source_count (the repointed, view-backed path).
+            if created_id is not None:
+                try:
+                    http_post(base + "/api/test-data", {
+                        "sample_id": created_id, "test_name": "resistance",
+                        "metric_name": "Rs", "numeric_value": "12.5", "unit": "ohm",
+                    })
+                    status, body = http_post(base + "/api/process", {
+                        "method": "stats", "sample_id": created_id,
+                    })
+                    result_row = json.loads(body)
+                    result = json.loads(result_row.get("result_json", "{}"))
+                    if status in (200, 201) and "source_count" in result:
+                        passes.append("POST /api/process (view-backed Analysis) -> source_count present")
+                    else:
+                        failures.append(f"/api/process view-backed path -> {status} / {result}")
+                except Exception as exc:  # noqa: BLE001
+                    failures.append(f"/api/process check raised {type(exc).__name__}: {exc}")
 
             # 4) Cascade-preview endpoint ----------------------------------
             if created_id is not None:

@@ -10,25 +10,33 @@ def fetch_processing_source(conn, sample_id=None, metric_name=None):
     where = []
     args = []
     if sample_id:
-        where.append("td.sample_id = ?")
+        where.append("m.sample_id = ?")
         args.append(sample_id)
     if metric_name:
-        where.append("td.metric_name = ?")
+        where.append("m.metric_name = ?")
         args.append(metric_name)
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     return rows_dict(
         conn.execute(
             f"""
             SELECT
-                td.*,
+                m.source,
+                m.source_row_id,
+                m.sample_id,
+                m.metric_name,
+                m.data_type,
+                m.numeric_value,
+                m.unit,
+                m.measured_at,
+                m.created_at,
                 s.sample_uid,
                 s.sample_display_code,
                 s.sample_code,
                 s.name AS sample_name
-            FROM test_data td
-            JOIN samples s ON s.id = td.sample_id
+            FROM measurements m
+            JOIN samples s ON s.id = m.sample_id
             {where_sql}
-            ORDER BY td.metric_name, td.measured_at, td.id
+            ORDER BY m.metric_name, m.measured_at, m.source, m.source_row_id
             """,
             args,
         ).fetchall()
@@ -90,7 +98,8 @@ def run_qc(rows, parameters):
         if value < lower or value > upper:
             failures.append(
                 {
-                    "id": row["id"],
+                    "source": row["source"],
+                    "source_row_id": row["source_row_id"],
                     "sample_uid": row["sample_uid"],
                     "sample_display_code": row["sample_display_code"],
                     "sample_code": row["sample_code"],
@@ -128,7 +137,8 @@ def run_normalize(rows):
         for row in metric_rows:
             normalized.append(
                 {
-                    "id": row["id"],
+                    "source": row["source"],
+                    "source_row_id": row["source_row_id"],
                     "sample_uid": row["sample_uid"],
                     "sample_display_code": row["sample_display_code"],
                     "sample_code": row["sample_code"],
