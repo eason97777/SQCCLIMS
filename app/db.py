@@ -9,10 +9,10 @@ import app.config as config
 def db_session():
     """Open a connection, manage its transaction, and ALWAYS close it.
 
-    Mirrors `with db_session() as conn:` (commit on success, rollback on
+    Mirrors `with connect_db() as conn:` (commit on success, rollback on
     exception) but additionally closes the connection deterministically rather
     than leaving it to GC — important under sustained concurrency. Use this in
-    place of `with db_session() as conn:` at call sites.
+    place of `with connect_db() as conn:` at call sites.
     """
     conn = connect_db()
     try:

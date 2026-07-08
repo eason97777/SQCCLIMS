@@ -42,23 +42,30 @@ SQCCLIMS is a locally-run **LIMS/MES** for a semiconductor / materials sample-te
 | Frontend | **React 19 + TypeScript + Vite** single-page app |
 | Parsers/visualizers | `parsers/` package (resistance + CD/SEM), invoked from the backend |
 
-The backend is intentionally dependency-free so it can be packaged and run on a lab workstation with just a Python install. Spreadsheet support (XLSX) is the one optional dependency declared in `requirements.txt`.
+The backend is intentionally dependency-free so it can be packaged and run on a lab workstation with just a Python install. The `parsers/` visualizers depend on **matplotlib** (chart rendering) and **openpyxl** (XLSX) — the runtime third-party dependencies, declared in `requirements.txt`; **pyinstaller** is used only for Windows packaging.
 
 ## Repository layout
 
 ```
 SQCCLIMS/                 # repo root
 ├── README.md               # this file
-├── CONTRIBUTING.md         # dev workflow, adding endpoints / migrations
-├── docs/                   # ARCHITECTURE, BACKEND_MODULES, Code_Structure, CODE_PRINCIPLES, Data_Flow, GLOSSARY
+├── CLAUDE.md / AGENTS.md   # AI-agent entrypoint (identical twins): rules + workflow
+├── CONTRIBUTING.md         # dev workflow (GitHub Flow), adding endpoints / migrations
+├── CHANGELOG.md            # release history
 ├── server.py               # thin entrypoint
+├── requirements.txt        # parsers/ runtime deps (matplotlib, openpyxl) + pyinstaller
 ├── app/                    # backend package (config, db, http, features, …)
 ├── parsers/                # resistance + CD/SEM parsers and visualizers
 ├── migrations/             # forward-only SQL migrations
-├── frontend/               # React + TS + Vite SPA (active)
+├── frontend/               # React + TS + Vite SPA
+├── .specify/               # SDD constitution + spec/plan/tasks templates
+├── specs/                  # per-feature specs (spec/plan/tasks/contracts)
+├── docs/                   # ARCHITECTURE, BACKEND_MODULES, Code_Structure, CODE_PRINCIPLES, Data_Flow, GLOSSARY
+├── scripts/                # DB/file restore + maintenance CLIs
+├── packaging/              # Windows service / installer build
 ├── templates/              # downloadable import templates
-├── tests/smoke_test.py     # regression smoke test
-└── history/                # legacy snapshots, gitignored
+├── tools/                  # local dev utilities
+└── tests/smoke_test.py     # regression smoke test
 ```
 
 The tree above is a top-level overview; [`docs/Code_Structure.md`](docs/Code_Structure.md) is the full directory map.
@@ -77,7 +84,7 @@ python3 server.py --host 127.0.0.1 --port 8000 --data-dir ./data
 
 On startup the server configures paths, ensures data directories, initializes the SQLite schema, runs pending migrations, and takes a startup backup before serving. It then serves the API under `/api/` and the built SPA for all other routes.
 
-Install the optional spreadsheet dependency if you need XLSX ingestion:
+Install the `parsers/` runtime dependencies (matplotlib for charts, openpyxl for XLSX):
 
 ```bash
 pip install -r requirements.txt
@@ -150,6 +157,7 @@ unchanged. `LIMS_AUTH_DISABLED=1` hard-forces auth off even if enabled.
 - [`docs/BACKEND_MODULES.md`](docs/BACKEND_MODULES.md) — per-module backend reference (responsibility, key functions, endpoints).
 - [`docs/Code_Structure.md`](docs/Code_Structure.md) — the full directory map.
 - [`docs/CODE_PRINCIPLES.md`](docs/CODE_PRINCIPLES.md) — coding conventions for humans and coding agents.
+- [`docs/DOMAIN_MODEL.md`](docs/DOMAIN_MODEL.md) — domain-model review: the storage-vs-transform axes, block boundaries, and naming collisions (advisory).
 - [`docs/Data_Flow.md`](docs/Data_Flow.md) — data flow + the authoritative deletion & data-safety policy.
 - [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — plain-language definitions of domain and tech terms.
 - [`docs/Development_Guide.md`](docs/Development_Guide.md) — redirect to [`CONTRIBUTING.md`](CONTRIBUTING.md) / this README.

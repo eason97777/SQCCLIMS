@@ -16,6 +16,8 @@ point here rather than maintaining their own copies of the tree.
 The application lives directly at the repo root (`SQCCLIMS/`).
 
 - `README.md` — project overview, startup, configuration (env vars).
+- `CLAUDE.md` / `AGENTS.md` — AI-agent entrypoint (identical twins): rules + workflow.
+- `CHANGELOG.md` — release history.
 - `CONTRIBUTING.md` — dev workflow, how to add an endpoint / migration.
 - `docs/` — project documentation set:
   - `ARCHITECTURE.md` — layered backend design and request lifecycle.
@@ -23,6 +25,7 @@ The application lives directly at the repo root (`SQCCLIMS/`).
     functions, endpoints).
   - `Code_Structure.md` — this file; the canonical directory map.
   - `CODE_PRINCIPLES.md` — coding conventions and principles.
+  - `DOMAIN_MODEL.md` — domain-model review (storage-vs-transform axes, boundaries, naming collisions; advisory).
   - `Data_Flow.md` — data flow plus the deletion/safety policy (canonical for
     what must not be committed).
   - `GLOSSARY.md` — domain and project terminology.
@@ -35,7 +38,6 @@ The application lives directly at the repo root (`SQCCLIMS/`).
   files, packaging output, and caches.
 - `server.py`, `app/`, `parsers/`, `migrations/`, `frontend/`, `templates/`,
   `tests/` — the active application (see below).
-- `history/` — legacy snapshots; gitignored, never committed.
 
 ## Backend
 
@@ -47,7 +49,7 @@ direction is low-level ← features ← http.
   migrations, takes a startup backup, writes a `server.pid` file, and serves.
 - `app/` — the backend package:
   - **Low-level / data:** `config.py` (runtime paths + constants),
-    `db.py` (`connect_db`, `record_deletion`, schema helpers),
+    `db.py` (`connect_db`, `db_session`, `record_deletion`, schema helpers),
     `validation.py` (input coercion, safe-path helpers, `now_iso`),
     `errors.py` (domain exceptions + exception→HTTP status map),
     `storage.py` (filesystem path resolution + uploaded/generated file storage).
