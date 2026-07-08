@@ -23,6 +23,17 @@ The loop:
 5. If you touched the frontend, lint and build it: `cd frontend && npm install && npm run lint && npm run build`.
 6. **Push your branch and open a Pull Request** against `main`. Don't commit runtime data, secrets, or build output (see Git conventions).
 
+## When is a branch ready to push?
+
+Push a branch only when it is **self-consistent, gates-green, and complete for its stated scope** — even if imperfect. Use the PR for *judgment* (design choices, trade-offs, "is this right?"), not to finish mechanical or half-done work: if a change is merely unfinished, finish it first; if it needs other eyes on a real decision, push and discuss in the PR. **One owner per branch**, and review comments are that owner's next task.
+
+**Pre-push checklist:**
+
+- [ ] Build / typecheck passes (frontend: `cd frontend && npm run build`).
+- [ ] Smoke test green (`python3 tests/smoke_test.py`).
+- [ ] No *new* lint errors (`npm run lint` — pre-existing errors excepted).
+- [ ] Complete and consistent for the change's scope — no half-applied renames, no mixed old/new, no stray TODOs unless intentional.
+
 ## Pull requests & review
 
 - A PR targets `main` and describes **what** changed and **why** (link the `specs/NNN-*` if there is one).
