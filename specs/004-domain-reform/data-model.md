@@ -176,8 +176,8 @@ shape:
 | `sample_id` | `rd.sample_id` | `pd.sample_id` | |
 | `sample_uid` | `rd.sample_uid` | `s.sample_uid` (join `samples`) | `performance_datasets` stores no uid |
 | `sample_display_code` | `rd.sample_display_code` | `s.sample_display_code` (join `samples`) | ditto |
-| `artifact_code` | `rd.raw_data_code` | **derived** — e.g. `'PERF-' || pd.id` (a stable display label; not a `raw_data` insert, so no `UNIQUE NOT NULL` constraint applies) | performance has no code; the view only needs a readable label |
-| `artifact_name` | `rd.raw_data_name` | `pd.dataset_name` | |
+| `raw_data_code` | `rd.raw_data_code` | **derived** — e.g. `'PERF-' || pd.id` (a stable display label; not a `raw_data` insert, so no `UNIQUE NOT NULL` constraint applies) | performance has no code; the view reuses the `raw_data_code` name so the existing list renderer works unchanged |
+| `raw_data_name` | `rd.raw_data_name` | `pd.dataset_name` | |
 | `data_type` | `rd.data_type` | literal `'performance'` | the artifact-type marker |
 | `data_category` | `rd.data_category` | literal `'performance'` | `RAW_DATA_TYPES` gains a `performance` entry (config, files-only, no parser) so new uploads categorize |
 | `source_type` | `rd.source_type` | `pd.data_format` | best-fit |
@@ -211,8 +211,8 @@ CREATE VIEW IF NOT EXISTS artifacts AS
         rd.sample_id            AS sample_id,
         rd.sample_uid           AS sample_uid,
         rd.sample_display_code  AS sample_display_code,
-        rd.raw_data_code        AS artifact_code,
-        rd.raw_data_name        AS artifact_name,
+        rd.raw_data_code        AS raw_data_code,
+        rd.raw_data_name        AS raw_data_name,
         rd.data_type            AS data_type,
         rd.data_category        AS data_category,
         rd.source_type          AS source_type,
@@ -238,8 +238,8 @@ CREATE VIEW IF NOT EXISTS artifacts AS
         pd.sample_id            AS sample_id,
         s.sample_uid            AS sample_uid,
         s.sample_display_code   AS sample_display_code,
-        'PERF-' || pd.id        AS artifact_code,
-        pd.dataset_name         AS artifact_name,
+        'PERF-' || pd.id        AS raw_data_code,
+        pd.dataset_name         AS raw_data_name,
         'performance'           AS data_type,
         'performance'           AS data_category,
         pd.data_format          AS source_type,
@@ -267,9 +267,10 @@ CREATE VIEW IF NOT EXISTS artifacts AS
 Notes:
 - `UNION ALL` (not `UNION`) — the two sources never collide on
   `(source, source_row_id)`, and we must not drop rows.
-- `artifact_code` for performance is a readable synthetic label
+- The performance `raw_data_code` is a readable synthetic label
   (`'PERF-' || pd.id`); it is **not** a `raw_data` insert, so no `UNIQUE NOT NULL`
-  constraint applies.
+  constraint applies. The view reuses `raw_data`'s column names (not `artifact_*`)
+  so the existing list renderer consumes both row kinds unchanged.
 - The view needs no index of its own; SQLite pushes the list predicates down to
   the base-table indexes (`sample_id`, `data_type`, and the performance dataset
   indexes) that already exist.
@@ -280,8 +281,9 @@ Notes:
 The Artifact **list** query (today `app/features/raw_data.py ::
 get_raw_data_list()`) repoints `FROM raw_data rd` → `FROM artifacts a`. Its
 filter columns — `sample_id`, `data_type`, `status`, `parser_status`, and the
-search `LIKE` set — all exist on the view (`artifact_code` / `artifact_name`
-stand in for `raw_data_code` / `raw_data_name`). Detail (`get_raw_data_detail`),
+search `LIKE` set — all exist on the view under the same `raw_data_*` column
+names, so the repoint is `FROM raw_data rd` → `FROM artifacts rd`. Detail
+(`get_raw_data_detail`),
 file listing, download, and `delete_raw_data` are **unchanged** (they serve
 raw-data-origin rows); performance-origin rows keep using `performance.py`'s
 existing endpoints, routed from the frontend by `source`. *Minor:* the unified

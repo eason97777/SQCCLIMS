@@ -267,6 +267,91 @@ def check_measurements_view() -> tuple[list[str], list[str]]:
     return passes, failures
 
 
+def check_artifacts_view() -> tuple[list[str], list[str]]:
+    """004 Phase 2a (AC-007): apply migrations/008_artifacts_view.sql to a scratch
+    DB seeded with a raw_data row and a performance_datasets row, and assert the
+    `artifacts` view UNIONs both, maps the performance branch into raw_data's shape
+    (PERF-<id> code, total_bytes->total_size, storage_dir->storage_path,
+    collected_at->measured_at, orphan fields -> json_object metadata_json), and
+    disambiguates the overlapping ids via (source, source_row_id)."""
+    passes: list[str] = []
+    failures: list[str] = []
+    mig = APP_ROOT / "migrations" / "008_artifacts_view.sql"
+    if not mig.exists():
+        return passes, [f"migration not found: {mig}"]
+    try:
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute("CREATE TABLE samples (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                     "sample_uid TEXT, sample_display_code TEXT)")
+        conn.execute(
+            "CREATE TABLE raw_data (id INTEGER PRIMARY KEY AUTOINCREMENT, sample_id INTEGER, "
+            "sample_uid TEXT, sample_display_code TEXT, raw_data_code TEXT, raw_data_name TEXT, "
+            "data_type TEXT, data_category TEXT, source_type TEXT, instrument TEXT, operator TEXT, "
+            "measured_at TEXT, parser_status TEXT, status TEXT, file_count INTEGER, total_size INTEGER, "
+            "storage_path TEXT, metadata_json TEXT, notes TEXT, created_at TEXT, updated_at TEXT)"
+        )
+        conn.execute(
+            "CREATE TABLE performance_datasets (id INTEGER PRIMARY KEY AUTOINCREMENT, sample_id INTEGER, "
+            "aliquot_code TEXT, dataset_name TEXT, test_type TEXT, data_format TEXT, source_folder_name TEXT, "
+            "storage_dir TEXT, file_count INTEGER, total_bytes INTEGER, collected_at TEXT, operator TEXT, "
+            "status TEXT, notes TEXT, created_at TEXT)"
+        )
+        conn.execute("INSERT INTO samples (sample_uid, sample_display_code) VALUES ('SMP-2026-000001', 'WFR-1')")
+        conn.execute("INSERT INTO raw_data (sample_id, raw_data_code, raw_data_name, data_type, "
+                     "data_category, file_count, total_size, created_at, updated_at) "
+                     "VALUES (1, 'RD-1', 'res', 'resistance', 'electrical', 2, 1024, 't', 't')")
+        conn.execute("INSERT INTO performance_datasets (sample_id, aliquot_code, dataset_name, test_type, "
+                     "data_format, source_folder_name, storage_dir, file_count, total_bytes, collected_at, "
+                     "operator, status, notes, created_at) "
+                     "VALUES (1, 'AQ-9', 'perf-run', 'iv', 'csv', 'fld', 'perf/x', 3, 2048, '2026-07-02', "
+                     "'ana', 'p', 'n', 't')")
+        conn.commit()
+
+        conn.execute("BEGIN")
+        for stmt in split_sql_statements(mig.read_text(encoding="utf-8")):
+            conn.execute(stmt)
+        conn.execute("COMMIT")
+
+        rows = {r["source"]: dict(r) for r in conn.execute(
+            "SELECT source, source_row_id, raw_data_code, data_type, total_size, "
+            "storage_path, measured_at, metadata_json FROM artifacts")}
+
+        rd = rows.get("raw_data", {})
+        if rd.get("raw_data_code") == "RD-1" and rd.get("source_row_id") == 1:
+            passes.append("artifacts view: raw_data branch projected 1:1")
+        else:
+            failures.append(f"artifacts view raw_data branch wrong: {rd}")
+
+        pf = rows.get("performance", {})
+        if (pf.get("raw_data_code") == "PERF-1" and pf.get("data_type") == "performance"
+                and pf.get("total_size") == 2048 and pf.get("storage_path") == "perf/x"
+                and pf.get("measured_at") == "2026-07-02"):
+            passes.append("artifacts view: performance branch mapped into raw_data shape")
+        else:
+            failures.append(f"artifacts view performance mapping wrong: {pf}")
+
+        try:
+            md = json.loads(pf.get("metadata_json") or "{}")
+        except (TypeError, ValueError):
+            md = {}
+        if md == {"aliquot_code": "AQ-9", "test_type": "iv", "data_format": "csv", "source_folder_name": "fld"}:
+            passes.append("artifacts view: performance orphan fields folded into metadata_json")
+        else:
+            failures.append(f"artifacts view metadata_json fold wrong: {md}")
+
+        idents = {(r["source"], r["source_row_id"]) for r in conn.execute(
+            "SELECT source, source_row_id FROM artifacts")}
+        if ("raw_data", 1) in idents and ("performance", 1) in idents:
+            passes.append("artifacts view: overlapping ids disambiguated by source")
+        else:
+            failures.append(f"artifacts view identity not disambiguated: {idents}")
+        conn.close()
+    except Exception as exc:  # noqa: BLE001
+        failures.append(f"artifacts view check raised {type(exc).__name__}: {exc}")
+    return passes, failures
+
+
 def wait_until_ready(base: str, proc: subprocess.Popen, timeout: float = 25.0) -> None:
     deadline = time.time() + timeout
     last_err = None
@@ -307,6 +392,11 @@ def run() -> int:
     mv_passes, mv_failures = check_measurements_view()
     passes.extend(mv_passes)
     failures.extend(mv_failures)
+
+    # 004 Phase 2a: the artifacts read model (in-process; no server needed).
+    av_passes, av_failures = check_artifacts_view()
+    passes.extend(av_passes)
+    failures.extend(av_failures)
 
     with tempfile.TemporaryDirectory(prefix="sqcclims-smoke-") as tmp:
         env = dict(os.environ)
