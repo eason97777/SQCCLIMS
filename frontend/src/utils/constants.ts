@@ -55,3 +55,12 @@ export const RAW_DATA_TYPE_OPTIONS = [
   { value: "instrument_folder", label: "仪器原始目录", category: "folder" },
   { value: "generic_file", label: "通用文件", category: "other" },
 ] as const;
+
+// Spec 004 Phase 2b: the Artifact list unions raw-data + performance rows.
+// RAW_DATA_TYPE_OPTIONS stays the set of types you can *create* via the raw-data
+// form (no performance — it's uploaded, not hand-created). ARTIFACT_TYPE_OPTIONS
+// adds `performance` and drives *filtering* and *labeling* of the unified list.
+export const ARTIFACT_TYPE_OPTIONS = [
+  ...RAW_DATA_TYPE_OPTIONS,
+  { value: "performance", label: "性能数据集", category: "performance" },
+] as const;

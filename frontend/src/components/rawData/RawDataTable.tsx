@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { RawDataRecord } from "../../types/rawData";
-import { RAW_DATA_TYPE_OPTIONS } from "../../utils/constants";
+import { ARTIFACT_TYPE_OPTIONS } from "../../utils/constants";
 import { formatDateTime } from "../../utils/formatDate";
 
 const PAGE_SIZE = 10;
@@ -24,8 +24,7 @@ function valueOrDash(value: string | number | null | undefined) {
 }
 
 function typeLabel(value: string) {
-  if (value === "performance") return "性能数据集";
-  return RAW_DATA_TYPE_OPTIONS.find((option) => option.value === value)?.label || value;
+  return ARTIFACT_TYPE_OPTIONS.find((option) => option.value === value)?.label || value;
 }
 
 function parserStatusClass(status: string) {

@@ -1,6 +1,6 @@
 import type { Sample } from "../../types/sample";
 import type { RawDataListParams } from "../../types/rawData";
-import { RAW_DATA_TYPE_OPTIONS } from "../../utils/constants";
+import { ARTIFACT_TYPE_OPTIONS } from "../../utils/constants";
 import { getSampleDisplayLabel } from "../../utils/sampleFields";
 
 type RawDataFilterProps = {
@@ -47,7 +47,7 @@ export function RawDataFilter({ filters, samples, onChange, onRefresh }: RawData
               onChange={(event) => onChange({ data_type: event.target.value })}
             >
               <option value="">全部类型</option>
-              {RAW_DATA_TYPE_OPTIONS.map((option) => (
+              {ARTIFACT_TYPE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>

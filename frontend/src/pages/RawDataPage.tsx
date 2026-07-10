@@ -31,7 +31,7 @@ import type {
   RawDataRecord,
   VisualizationPayload,
 } from "../types/rawData";
-import { RAW_DATA_TYPE_OPTIONS } from "../utils/constants";
+import { ARTIFACT_TYPE_OPTIONS } from "../utils/constants";
 import { formatDateTime } from "../utils/formatDate";
 import { formatFileSize } from "../utils/fileSize";
 
@@ -46,7 +46,7 @@ function valueOrDash(value: string | number | null | undefined) {
 }
 
 function dataTypeLabel(value: string) {
-  return RAW_DATA_TYPE_OPTIONS.find((option) => option.value === value)?.label || value;
+  return ARTIFACT_TYPE_OPTIONS.find((option) => option.value === value)?.label || value;
 }
 
 function parserStatusLabel(status: string) {
