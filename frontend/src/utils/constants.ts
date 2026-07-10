@@ -2,10 +2,9 @@ export const NAV_ITEMS = [
   { path: "/", label: "总览" },
   { path: "/samples", label: "样品信息库" },
   { path: "/process-records", label: "工艺记录" },
-  { path: "/raw-data", label: "原始数据" },
+  { path: "/raw-data", label: "原始数据 / 制品" },
   { path: "/characterization", label: "表征数据中心" },
   { path: "/test-data", label: "测试结果" },
-  { path: "/performance-datasets", label: "性能数据集" },
   { path: "/processing", label: "数据分析" },
 ] as const;
 

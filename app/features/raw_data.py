@@ -115,14 +115,19 @@ def get_raw_data_list(query_params):
         args.extend([like, like, like, like, like, like, like])
 
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    # Spec 004 Phase 2b: the Artifact list reads the `artifacts` view, so both
+    # raw-data and performance rows appear, each tagged with `source`. The view
+    # has no bare `id` (raw_data.id and performance_datasets.id overlap), so we
+    # expose `source_row_id AS id` for the existing list renderer, and callers
+    # route detail/delete by `source` (raw-data-origin vs performance-origin).
     with db_session() as conn:
         return rows_dict(
             conn.execute(
                 f"""
-                SELECT rd.*
-                FROM raw_data rd
+                SELECT rd.*, rd.source_row_id AS id
+                FROM artifacts rd
                 {where_sql}
-                ORDER BY rd.created_at DESC, rd.id DESC
+                ORDER BY rd.created_at DESC, rd.source, rd.source_row_id DESC
                 LIMIT 500
                 """,
                 args,

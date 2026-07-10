@@ -1,8 +1,7 @@
-import { createBrowserRouter } from "react-router-dom";
+import { Navigate, createBrowserRouter } from "react-router-dom";
 import App from "../App";
 import { CharacterizationPage } from "../pages/CharacterizationPage";
 import { DashboardPage } from "../pages/DashboardPage";
-import { PerformanceDatasetPage } from "../pages/PerformanceDatasetPage";
 import { ProcessingPage } from "../pages/ProcessingPage";
 import { ProcessRecordPage } from "../pages/ProcessRecordPage";
 import { RawDataPage } from "../pages/RawDataPage";
@@ -40,8 +39,10 @@ export const router = createBrowserRouter([
         element: <TestDataPage />,
       },
       {
+        // Spec 004 Phase 2b: performance folds into Artifacts — legacy routes
+        // redirect into the unified Raw Data / Artifacts list, filtered to type.
         path: "performance-datasets",
-        element: <PerformanceDatasetPage />,
+        element: <Navigate to="/raw-data?data_type=performance" replace />,
       },
       {
         path: "data",
@@ -49,7 +50,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "performance",
-        element: <PerformanceDatasetPage />,
+        element: <Navigate to="/raw-data?data_type=performance" replace />,
       },
       {
         path: "processing",

@@ -10,6 +10,7 @@ type RawDataTableProps = {
   rawData: RawDataRecord[];
   loading?: boolean;
   selectedRawDataId?: number | null;
+  selectedSource?: string | null;
   onSelect: (record: RawDataRecord) => void;
   onDelete: (record: RawDataRecord) => void;
 };
@@ -23,6 +24,7 @@ function valueOrDash(value: string | number | null | undefined) {
 }
 
 function typeLabel(value: string) {
+  if (value === "performance") return "性能数据集";
   return RAW_DATA_TYPE_OPTIONS.find((option) => option.value === value)?.label || value;
 }
 
@@ -45,6 +47,7 @@ export function RawDataTable({
   rawData,
   loading = false,
   selectedRawDataId = null,
+  selectedSource = null,
   onSelect,
   onDelete,
 }: RawDataTableProps) {
@@ -87,8 +90,13 @@ export function RawDataTable({
 
             {pageRawData.map((record) => (
               <tr
-                className={selectedRawDataId === record.id ? "raw-data-selected-row" : undefined}
-                key={record.id}
+                className={
+                  selectedRawDataId === record.id &&
+                  (selectedSource ?? "raw_data") === (record.source ?? "raw_data")
+                    ? "raw-data-selected-row"
+                    : undefined
+                }
+                key={`${record.source ?? "raw_data"}:${record.id}`}
               >
                 <td title={record.sample_display_code}>
                   <strong>{valueOrDash(record.sample_display_code)}</strong>
@@ -105,13 +113,15 @@ export function RawDataTable({
                     <button className="ghost-button" type="button" onClick={() => onSelect(record)}>
                       详情
                     </button>
-                    <button
-                      className="danger-button"
-                      type="button"
-                      onClick={() => onDelete(record)}
-                    >
-                      删除
-                    </button>
+                    {(record.source ?? "raw_data") !== "performance" ? (
+                      <button
+                        className="danger-button"
+                        type="button"
+                        onClick={() => onDelete(record)}
+                      >
+                        删除
+                      </button>
+                    ) : null}
                   </div>
                 </td>
               </tr>

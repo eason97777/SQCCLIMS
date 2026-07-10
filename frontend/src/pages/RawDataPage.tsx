@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   getParsedData,
   getProcessingJobs,
@@ -7,6 +8,7 @@ import {
 } from "../api/rawDataApi";
 import { getSamples } from "../api/samplesApi";
 import { RawDataDetailPanel } from "../components/rawData/RawDataDetailPanel";
+import { PerformanceArtifactDetail } from "../components/rawData/PerformanceArtifactDetail";
 import { RawDataFilter } from "../components/rawData/RawDataFilter";
 import { RawDataForm } from "../components/rawData/RawDataForm";
 import { RawDataTable } from "../components/rawData/RawDataTable";
@@ -244,11 +246,21 @@ export function RawDataPage() {
   const [filePreviewLoading, setFilePreviewLoading] = useState(false);
   const [filePreviewError, setFilePreviewError] = useState("");
   const [fileDeleting, setFileDeleting] = useState(false);
+  const [searchParams] = useSearchParams();
 
   const pageError = useMemo(
     () => localError || error || samplesError,
     [error, localError, samplesError],
   );
+
+  // Spec 004 Phase 2b: legacy /performance-datasets redirects here with
+  // ?data_type=performance; apply it as a filter so the unified list opens scoped.
+  useEffect(() => {
+    const nextType = searchParams.get("data_type");
+    if (nextType) {
+      setFilters({ data_type: nextType });
+    }
+  }, [searchParams, setFilters]);
 
   useEffect(() => {
     let active = true;
@@ -304,7 +316,7 @@ export function RawDataPage() {
     let active = true;
 
     async function loadResults() {
-      if (!selectedRawData?.id) {
+      if (!selectedRawData?.id || selectedRawData.source === "performance") {
         setParsedData([]);
         setSelectedParsedData(null);
         setProcessingJobs([]);
@@ -334,7 +346,7 @@ export function RawDataPage() {
     return () => {
       active = false;
     };
-  }, [selectedRawData?.id]);
+  }, [selectedRawData?.id, selectedRawData?.source]);
 
   async function handleCreate(payload: RawDataPayload) {
     setLocalError("");
@@ -350,6 +362,18 @@ export function RawDataPage() {
 
   async function handleSelect(record: RawDataRecord) {
     setLocalError("");
+
+    if ((record.source ?? "raw_data") === "performance") {
+      // Performance-origin artifact: its detail + delete are self-contained in
+      // PerformanceArtifactDetail (perf endpoints, keyed by source_row_id); no
+      // raw-data fetch. Clear any raw-data results from a prior selection.
+      setSelectedRawData(record);
+      setParsedData([]);
+      setSelectedParsedData(null);
+      setProcessingJobs([]);
+      setActiveMainTab("detail");
+      return;
+    }
 
     try {
       const detail = await loadRawDataDetail(record.id);
@@ -551,6 +575,7 @@ export function RawDataPage() {
                 key={`${filters.sample_id ?? ""}-${filters.data_type ?? ""}-${filters.parser_status ?? ""}-${filters.status ?? ""}-${filters.query ?? ""}`}
                 rawData={rawData}
                 selectedRawDataId={selectedRawData?.id ?? null}
+                selectedSource={selectedRawData?.source ?? null}
                 onSelect={(record) => void handleSelect(record)}
                 onDelete={(record) => requestDelete(record)}
               />
@@ -566,20 +591,32 @@ export function RawDataPage() {
 
       {activeMainTab === "detail" ? (
         <section className="panel raw-data-detail-panel raw-data-tab-panel">
-          <RawDataDetailPanel
-            rawData={selectedRawData}
-            parsedData={parsedData}
-            selectedParsedData={selectedParsedData}
-            processingJobs={processingJobs}
-            uploading={uploading}
-            parsing={parsing}
-            onUpload={(rawDataId, files) => void handleUpload(rawDataId, files)}
-            onDownloadFile={downloadRawDataFile}
-            onDeleteFile={(file, rawDataId) => requestFileDelete(file, rawDataId)}
-            onParse={(rawDataId) => void handleParse(rawDataId)}
-            onVisualize={(parsedDataId, payload) => void handleVisualize(parsedDataId, payload)}
-            onSelectParsedData={setSelectedParsedData}
-          />
+          {selectedRawData?.source === "performance" ? (
+            <PerformanceArtifactDetail
+              key={selectedRawData.source_row_id ?? selectedRawData.id}
+              record={selectedRawData}
+              onDeleted={() => {
+                setSelectedRawData(null);
+                setActiveMainTab("list");
+                void refreshRawData();
+              }}
+            />
+          ) : (
+            <RawDataDetailPanel
+              rawData={selectedRawData}
+              parsedData={parsedData}
+              selectedParsedData={selectedParsedData}
+              processingJobs={processingJobs}
+              uploading={uploading}
+              parsing={parsing}
+              onUpload={(rawDataId, files) => void handleUpload(rawDataId, files)}
+              onDownloadFile={downloadRawDataFile}
+              onDeleteFile={(file, rawDataId) => requestFileDelete(file, rawDataId)}
+              onParse={(rawDataId) => void handleParse(rawDataId)}
+              onVisualize={(parsedDataId, payload) => void handleVisualize(parsedDataId, payload)}
+              onSelectParsedData={setSelectedParsedData}
+            />
+          )}
         </section>
       ) : null}
 

@@ -89,7 +89,11 @@ export function useRawDataStore(): RawDataStoreState {
           return null;
         }
 
-        const currentRow = nextRawData.find((record) => record.id === current.id);
+        const currentRow = nextRawData.find(
+          (record) =>
+            record.id === current.id &&
+            (record.source ?? "raw_data") === (current.source ?? "raw_data"),
+        );
         return currentRow ? { ...current, ...currentRow } : null;
       });
     } catch (err) {

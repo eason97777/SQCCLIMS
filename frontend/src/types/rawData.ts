@@ -11,6 +11,11 @@ export type RawDataType =
 
 export type RawDataRecord = {
   id: number;
+  // Spec 004 Phase 2b: the `artifacts` view unions raw-data + performance rows.
+  // `source` disambiguates them (raw_data.id and performance_datasets.id overlap);
+  // `id` mirrors `source_row_id` so the raw-data detail path is unchanged.
+  source?: "raw_data" | "performance";
+  source_row_id?: number;
   sample_id: number;
   sample_uid: string;
   sample_display_code: string;
