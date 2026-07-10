@@ -9,6 +9,9 @@ import {
 import { getSamples } from "../api/samplesApi";
 import { RawDataDetailPanel } from "../components/rawData/RawDataDetailPanel";
 import { PerformanceArtifactDetail } from "../components/rawData/PerformanceArtifactDetail";
+import { DatasetImportPanel } from "../components/performance/DatasetImportPanel";
+import { uploadPerformanceDataset } from "../api/performanceApi";
+import type { PerformanceDatasetFields } from "../types/performance";
 import { RawDataFilter } from "../components/rawData/RawDataFilter";
 import { RawDataForm } from "../components/rawData/RawDataForm";
 import { RawDataTable } from "../components/rawData/RawDataTable";
@@ -32,7 +35,7 @@ import { RAW_DATA_TYPE_OPTIONS } from "../utils/constants";
 import { formatDateTime } from "../utils/formatDate";
 import { formatFileSize } from "../utils/fileSize";
 
-type RawDataMainTab = "list" | "detail" | "create";
+type RawDataMainTab = "list" | "detail" | "create" | "perf-upload";
 
 function valueOrDash(value: string | number | null | undefined) {
   if (value === null || value === undefined || value === "") {
@@ -246,6 +249,7 @@ export function RawDataPage() {
   const [filePreviewLoading, setFilePreviewLoading] = useState(false);
   const [filePreviewError, setFilePreviewError] = useState("");
   const [fileDeleting, setFileDeleting] = useState(false);
+  const [perfUploading, setPerfUploading] = useState(false);
   const [searchParams] = useSearchParams();
 
   const pageError = useMemo(
@@ -357,6 +361,24 @@ export function RawDataPage() {
       setActiveMainTab("detail");
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "创建 Raw Data 失败");
+    }
+  }
+
+  async function handlePerfImport(fields: PerformanceDatasetFields, files: File[]) {
+    setLocalError("");
+    setPerfUploading(true);
+    try {
+      // Spec 004 Phase 2b: performance upload lands via the existing endpoint
+      // (writes performance_datasets); the artifacts view surfaces it in this
+      // same unified list. (Reframing the write to raw_data is a later step.)
+      await uploadPerformanceDataset(fields, files);
+      await refreshRawData();
+      setFilters({ data_type: "performance" });
+      setActiveMainTab("list");
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : "导入性能数据集失败");
+    } finally {
+      setPerfUploading(false);
     }
   }
 
@@ -544,6 +566,7 @@ export function RawDataPage() {
           ["list", "数据清单"],
           ["detail", "数据详情"],
           ["create", "新建数据"],
+          ["perf-upload", "性能上传"],
         ].map(([tab, label]) => (
           <button
             key={tab}
@@ -631,6 +654,25 @@ export function RawDataPage() {
                 带 * 为必填字段，创建后将自动刷新 Raw Data 列表并跳转到数据详情页。
               </div>
             </>
+          )}
+        </section>
+      ) : null}
+
+      {activeMainTab === "perf-upload" ? (
+        <section className="panel form-panel raw-data-tab-panel">
+          <div className="panel-header">
+            <h3>性能数据集上传</h3>
+          </div>
+          {samplesLoading ? (
+            <div className="empty-row">加载样品选项中...</div>
+          ) : (
+            <div className="import-grid">
+              <DatasetImportPanel
+                samples={samples}
+                uploading={perfUploading}
+                onImport={(fields, files) => void handlePerfImport(fields, files)}
+              />
+            </div>
           )}
         </section>
       ) : null}
